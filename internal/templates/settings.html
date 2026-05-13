@@ -508,18 +508,14 @@
 
         <form
           id="settings-change-password-form"
-          action="/api/settings/change-password"
+          action="/api/settings/start-local-password-setup"
           method="post"
-          hx-post="/api/settings/change-password"
-          hx-target="#settings-change-password-status"
-          hx-swap="innerHTML"
           class="space-y-4"
           data-settings-local-password-form
           novalidate
           data-required-message="{{t .Messages "validation.required"}}"
           data-password-mismatch-message="{{t .Messages "auth.error.password_mismatch"}}"
-          data-weak-password-message="{{t .Messages "auth.password_requirements"}}"
-          data-save-feedback>
+          data-weak-password-message="{{t .Messages "auth.password_requirements"}}">
           <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
           {{template "password_username_context_field" (dict "Value" .CurrentUser.Email)}}
 
@@ -580,9 +576,18 @@
         <form
           action="/api/settings/regenerate-recovery-code"
           method="post"
+          class="space-y-4"
           data-confirm="{{t .Messages "settings.confirm_regenerate_recovery_code"}}"
           data-confirm-accept="{{t .Messages "settings.recovery_code.submit"}}">
           <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          {{template "password_username_context_field" (dict "Value" .CurrentUser.Email)}}
+          {{template "password_toggle_field" (dict
+            "Messages" .Messages
+            "LabelKey" "settings.delete_account.password"
+            "FieldID" "settings-recovery-code-password"
+            "FieldName" "password"
+            "Autocomplete" "current-password"
+            "Required" true)}}
           <button type="submit" class="btn-secondary">{{t .Messages "settings.recovery_code.submit"}}</button>
         </form>
         {{else}}
