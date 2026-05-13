@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestRegisterSuccessRedirectsToInlineRecoverySurfaceAndSetsCookies(t *testing.T) {
+func TestRegisterSuccessIssuesPickupCookieAndRedirectsToWelcome(t *testing.T) {
 	app, _ := newOnboardingTestApp(t)
 	email := "autologin-register@example.com"
 
@@ -30,16 +30,17 @@ func TestRegisterSuccessRedirectsToInlineRecoverySurfaceAndSetsCookies(t *testin
 	if response.StatusCode != http.StatusSeeOther {
 		t.Fatalf("expected status 303, got %d", response.StatusCode)
 	}
-	if location := response.Header.Get("Location"); location != "/register" {
-		t.Fatalf("expected redirect to /register, got %q", location)
+	if location := response.Header.Get("Location"); location != "/register/welcome" {
+		t.Fatalf("expected redirect to /register/welcome, got %q", location)
 	}
 
-	authCookie := responseCookieValue(response.Cookies(), authCookieName)
-	if authCookie == "" {
-		t.Fatalf("expected auth cookie in register response for auto-login")
+	if cookie := responseCookieValue(response.Cookies(), authCookieName); cookie != "" {
+		t.Fatalf("expected no auth cookie on POST register; got %q", cookie)
 	}
-	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
-	if recoveryCookie == "" {
-		t.Fatalf("expected recovery page cookie in register response")
+	if cookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName); cookie != "" {
+		t.Fatalf("expected no recovery cookie on POST register; got %q", cookie)
+	}
+	if pickup := responseCookieValue(response.Cookies(), registerPickupCookieName); pickup == "" {
+		t.Fatalf("expected pickup cookie in register response")
 	}
 }

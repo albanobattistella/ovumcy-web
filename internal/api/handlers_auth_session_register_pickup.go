@@ -1,0 +1,130 @@
+package api
+
+import (
+	"strings"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/ovumcy/ovumcy-web/internal/services"
+	"golang.org/x/crypto/bcrypt"
+)
+
+const registerPickupNextPath = "/register/welcome"
+
+// registerPickupOutcome wraps the pickup payload built for the new-user
+// branch or the decoy payload built for the duplicate-email branch, so that
+// the Register handler can keep both branches structurally identical and
+// respondRegisterPickup is the single point where the sealed cookie is
+// written. Build errors are extremely rare (rand.Reader failures) but are
+// surfaced consistently between branches.
+type registerPickupOutcome struct {
+	payload registerPickupPayload
+	err     error
+}
+
+func registerPickupOutcomeReal(now time.Time, userID uint, recoveryCode string) registerPickupOutcome {
+	payload, err := newRegisterPickupPayload(now, userID, recoveryCode)
+	return registerPickupOutcome{payload: payload, err: err}
+}
+
+func registerPickupOutcomeDecoy(now time.Time) registerPickupOutcome {
+	payload, err := newRegisterPickupDecoyPayload(now)
+	return registerPickupOutcome{payload: payload, err: err}
+}
+
+func (handler *Handler) respondRegisterPickup(c *fiber.Ctx, outcome registerPickupOutcome) error {
+	if outcome.err != nil {
+		spec := registerPickupCookieErrorSpec()
+		handler.logSecurityError(c, "auth.register", spec)
+		return handler.respondMappedError(c, spec)
+	}
+	if err := handler.setRegisterPickupCookie(c, outcome.payload); err != nil {
+		spec := registerPickupCookieErrorSpec()
+		handler.logSecurityError(c, "auth.register", spec)
+		return handler.respondMappedError(c, spec)
+	}
+
+	if acceptsJSON(c) {
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+			"ok":        true,
+			"next_step": "register_welcome",
+			"next_path": registerPickupNextPath,
+		})
+	}
+	return redirectToPath(c, registerPickupNextPath)
+}
+
+// PickupRegister completes a fresh registration by exchanging the sealed
+// pickup cookie that POST /api/auth/register handed back for the real auth
+// session cookie and the inline recovery-code surface. The same endpoint
+// handles three indistinguishable-from-outside outcomes:
+//
+//   - real pickup: cookie decrypts to a uid that resolves to a user whose
+//     RecoveryCodeHash matches the pickup recovery code; we issue auth +
+//     recovery cookies and redirect to /register to reveal the code.
+//   - decoy pickup (duplicate email branch): cookie decrypts to a random uid
+//     whose bcrypt(recovery_code) verification fails; we redirect to /login
+//     with a neutral flash.
+//   - missing / tampered / expired pickup: same /login redirect with the
+//     same flash so an attacker who arrives at /register/welcome by hand
+//     cannot tell the failure mode from the response.
+//
+// See SECURITY.md "Register enumeration" for the residual two-step oracle
+// (which redirect target the holder of a pickup cookie observes after their
+// own POST /api/auth/register).
+func (handler *Handler) PickupRegister(c *fiber.Ctx) error {
+	if !handler.localPublicAuthEnabled() {
+		handler.clearRegisterPickupCookie(c)
+		return c.Redirect("/login", fiber.StatusSeeOther)
+	}
+
+	payload, ok := handler.popRegisterPickupCookie(c)
+	if !ok {
+		return handler.redirectToPostRegisterSignin(c, "missing_or_expired")
+	}
+
+	userID, err := payload.userID()
+	if err != nil || userID == 0 {
+		return handler.redirectToPostRegisterSignin(c, "invalid_uid")
+	}
+
+	user, err := handler.authService.FindByID(userID)
+	if err != nil {
+		return handler.redirectToPostRegisterSignin(c, "user_not_found")
+	}
+
+	if strings.TrimSpace(user.RecoveryCodeHash) == "" {
+		return handler.redirectToPostRegisterSignin(c, "recovery_hash_missing")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.RecoveryCodeHash), []byte(payload.RC)); err != nil {
+		return handler.redirectToPostRegisterSignin(c, "decoy_or_mismatch")
+	}
+
+	if _, err := handler.setAuthCookie(c, &user, true); err != nil {
+		spec := authSessionCreateErrorSpec()
+		handler.logSecurityError(c, "auth.register_pickup", spec)
+		return handler.redirectToPostRegisterSignin(c, "auth_cookie_failed")
+	}
+	handler.clearOIDCLogoutTransportCookies(c)
+
+	continuePath := services.PostLoginRedirectPath(&user)
+	if err := handler.setRecoveryCodeIssuanceCookie(c, user.ID, payload.RC, continuePath, recoveryCodeSurfaceInlineRegister); err != nil {
+		handler.clearAuthCookie(c)
+		spec := authRecoveryCodePersistErrorSpec()
+		handler.logSecurityError(c, "auth.register_pickup", spec)
+		return handler.redirectToPostRegisterSignin(c, "recovery_cookie_failed")
+	}
+
+	handler.logSecurityEvent(c, "auth.register_pickup", "success")
+	return c.Redirect("/register", fiber.StatusSeeOther)
+}
+
+func (handler *Handler) redirectToPostRegisterSignin(c *fiber.Ctx, reason string) error {
+	handler.clearRegisterPickupCookie(c)
+	handler.setFlashCookie(c, FlashPayload{AuthError: "register pickup unavailable"})
+	if reason != "" {
+		handler.logSecurityEvent(c, "auth.register_pickup", "redirect_signin", securityEventField("reason", reason))
+	}
+	return c.Redirect("/login", fiber.StatusSeeOther)
+}

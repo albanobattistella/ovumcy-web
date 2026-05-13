@@ -26,41 +26,31 @@ func (handler *Handler) Register(c *fiber.Ctx) error {
 		return handler.respondMappedError(c, spec)
 	}
 
+	// Cookie-less register: do not issue ovumcy_auth or ovumcy_recovery_code
+	// directly. Instead, build a sealed pickup cookie whose ciphertext shape
+	// is identical for new-email success and duplicate-email collision, and
+	// redirect to GET /register/welcome. That endpoint dispatches to either
+	// the inline recovery surface (real pickup) or /login (decoy / expired).
+	// See SECURITY.md "Register enumeration" for the residual two-step oracle.
+	now := time.Now().In(handler.location)
 	user, recoveryCode, err := handler.registrationService.RegisterOwnerAccount(
 		credentials.Email,
 		credentials.Password,
 		credentials.ConfirmPassword,
-		time.Now().In(handler.location),
+		now,
 	)
 	if err != nil {
-		// Email collisions used to return 400 invalid-input here, which made
-		// /api/auth/register a single-request oracle for "does this email
-		// already have an account" — a privacy-sensitive leak in a health
-		// app (GDPR Art. 9). Hide the collision behind the new-account
-		// status + body. The response is still distinguishable by the
-		// absence of Set-Cookie auth and recovery headers, which is
-		// documented as a residual signal in SECURITY.md.
 		if errors.Is(err, services.ErrAuthEmailExists) {
 			handler.logSecurityEvent(c, "auth.register", "duplicate_silenced")
-			return handler.renderRegisterDuplicateSilencedResponse(c, fiber.StatusCreated)
+			return handler.respondRegisterPickup(c, registerPickupOutcomeDecoy(now))
 		}
 		spec := mapAuthRegisterError(err)
 		handler.logSecurityError(c, "auth.register", spec)
 		return handler.respondMappedError(c, spec)
 	}
 
-	if _, err := handler.setAuthCookie(c, &user, true); err != nil {
-		spec := authSessionCreateErrorSpec()
-		if errors.Is(err, services.ErrAuthUnsupportedRole) {
-			spec = authWebSignInUnavailableErrorSpec()
-		}
-		handler.logSecurityError(c, "auth.register", spec)
-		return handler.respondMappedError(c, spec)
-	}
-	handler.clearOIDCLogoutTransportCookies(c)
-
 	handler.logSecurityEvent(c, "auth.register", "success")
-	return handler.renderRegisterInlineRecoveryResponse(c, &user, recoveryCode, fiber.StatusCreated)
+	return handler.respondRegisterPickup(c, registerPickupOutcomeReal(now, user.ID, recoveryCode))
 }
 
 func (handler *Handler) Login(c *fiber.Ctx) error {

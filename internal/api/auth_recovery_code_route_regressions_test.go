@@ -131,17 +131,30 @@ func registerAndExtractRecoveryCookies(t *testing.T, app *fiber.App, email strin
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	response, err := app.Test(request, -1)
+	registerResponse, err := app.Test(request, -1)
 	if err != nil {
 		t.Fatalf("register request failed: %v", err)
 	}
-	defer response.Body.Close()
+	defer registerResponse.Body.Close()
 
-	if response.StatusCode != http.StatusSeeOther {
-		t.Fatalf("expected register status 303, got %d", response.StatusCode)
+	if registerResponse.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected register status 303, got %d", registerResponse.StatusCode)
 	}
 
-	authCookie := responseCookieValue(response.Cookies(), authCookieName)
-	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
+	pickup := responseCookieValue(registerResponse.Cookies(), registerPickupCookieName)
+	if pickup == "" {
+		t.Fatalf("expected pickup cookie after register")
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
+	pickupResponse, err := app.Test(pickupRequest, -1)
+	if err != nil {
+		t.Fatalf("register/welcome request failed: %v", err)
+	}
+	defer pickupResponse.Body.Close()
+
+	authCookie := responseCookieValue(pickupResponse.Cookies(), authCookieName)
+	recoveryCookie := responseCookieValue(pickupResponse.Cookies(), recoveryCodeCookieName)
 	return authCookie, recoveryCookie
 }

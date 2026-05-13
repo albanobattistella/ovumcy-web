@@ -12,6 +12,7 @@ var authErrorTranslationKeys = map[string]string{
 	"too many requests":                               "common.error.too_many_requests",
 	"common.error.too_many_requests":                  "common.error.too_many_requests",
 	"email already exists":                            "auth.error.email_exists",
+	"register pickup unavailable":                     "auth.error.post_register_signin",
 	"weak password":                                   "auth.error.weak_password",
 	"password mismatch":                               "auth.error.password_mismatch",
 	"invalid recovery code":                           "auth.error.invalid_recovery_code",

@@ -25,13 +25,11 @@ Do not open public GitHub issues for unpatched security vulnerabilities.
 
 A few information-disclosure signals are accepted residual risk because closing them either breaks core flows or requires infrastructure Ovumcy does not assume self-hosters have (for example SMTP).
 
-### Register: silenced status code, residual `Set-Cookie` signal
+### Register enumeration: pickup-cookie follow-up oracle (residual)
 
-`POST /api/auth/register` returns the same status (`201 Created`) and JSON body for both a brand-new email and a duplicate, but only the new-email response sets the `ovumcy_auth` and `ovumcy_recovery_code` cookies. An attacker who can inspect raw response headers (proxy logs, browser dev tools on their own machine, MITM under a separate threat model) can still tell a collision from a success.
+`POST /api/auth/register` returns identical status, body, and Set-Cookie shape (a single sealed `ovumcy_register_pickup` cookie of fixed length, no `ovumcy_auth` or `ovumcy_recovery_code`) for both a brand-new email and a duplicate. The follow-up `GET /register/welcome` then dispatches the pickup cookie either to `/register` (with auth and recovery cookies) for a valid pickup or to `/login` (with a neutral flash) for a decoy or expired pickup. An attacker who holds their own pickup cookie from a probe POST can therefore observe which redirect target their cookie resolves to and infer whether the email was new or already registered. This turns the single-request status / cookie oracle into a two-request probe, with both endpoints under per-IP rate limiting, and the login bcrypt-timing equalization (`equalizeAuthCredentialsTiming`) further bounding any cross-endpoint follow-up.
 
-Closing the signal entirely requires either (a) a magic-link / email-driven enrollment flow that does not issue cookies at the register endpoint at all, which depends on SMTP infrastructure Ovumcy does not require operators to configure, or (b) emitting decoy cookies whose downstream resolution fails in exactly the same way as a stale session. Both are tracked as follow-up work; the current state already removes the single-request status-code oracle.
-
-Rate limiting on `/api/auth/register` and the login bcrypt-timing equalization (`equalizeAuthCredentialsTiming`) bound how quickly an attacker can probe an email list against either oracle.
+Closing the residual signal entirely is mathematically impossible without an out-of-band verification channel: any in-app dispatch on the pickup cookie reveals the branch, and any login-after-register variant turns the probe into a follow-up POST `/api/auth/login` whose success or failure carries the same information. The only options are (a) a magic-link / email-driven enrollment that gates registration behind SMTP delivery (not assumed in the self-hosted deployment model), or (b) acceptance of the documented two-request probe. Both are revisited if Ovumcy ever ships a multi-tenant SaaS variant.
 
 ### Login: `requires_totp` reveals 2FA status
 

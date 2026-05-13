@@ -87,11 +87,12 @@ func TestRegisterRejectsPasswordMismatch(t *testing.T) {
 	}
 }
 
-// assertRegisterDuplicateResponseLooksLikeSuccess pins the silencing fix for
-// #5: a register POST hitting an existing email must return the same status
-// and JSON shape as a new-email enrollment. Set-Cookie inspection can still
-// distinguish the cases (no auth/recovery cookies are issued for the duplicate),
-// and that residual signal is documented in SECURITY.md.
+// assertRegisterDuplicateResponseLooksLikeSuccess pins the cookie-less
+// register enrollment closure for #5: a register POST hitting an existing
+// email must return the same status, JSON shape, AND Set-Cookie shape (one
+// decoy ovumcy_register_pickup cookie of the same length, no ovumcy_auth or
+// ovumcy_recovery_code) as a new-email enrollment. The residual two-step
+// pickup-follow oracle is documented in SECURITY.md.
 func assertRegisterDuplicateResponseLooksLikeSuccess(t *testing.T, response *http.Response) {
 	t.Helper()
 	if response.StatusCode != http.StatusCreated {
@@ -104,11 +105,11 @@ func assertRegisterDuplicateResponseLooksLikeSuccess(t *testing.T, response *htt
 	if ok, _ := payload["ok"].(bool); !ok {
 		t.Fatalf("expected ok=true in duplicate register response, got %#v", payload)
 	}
-	if step, _ := payload["next_step"].(string); step != "recovery_code" {
-		t.Fatalf("expected next_step=recovery_code, got %#v", payload["next_step"])
+	if step, _ := payload["next_step"].(string); step != "register_welcome" {
+		t.Fatalf("expected next_step=register_welcome, got %#v", payload["next_step"])
 	}
-	if path, _ := payload["next_path"].(string); path != "/register" {
-		t.Fatalf("expected next_path=/register, got %#v", payload["next_path"])
+	if path, _ := payload["next_path"].(string); path != "/register/welcome" {
+		t.Fatalf("expected next_path=/register/welcome, got %#v", payload["next_path"])
 	}
 	if _, exposed := payload["error"]; exposed {
 		t.Fatalf("expected no error field in silenced response, got %#v", payload["error"])
@@ -118,6 +119,9 @@ func assertRegisterDuplicateResponseLooksLikeSuccess(t *testing.T, response *htt
 	}
 	if cookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName); cookie != "" {
 		t.Fatalf("expected no recovery cookie in silenced response, got %q", cookie)
+	}
+	if pickup := responseCookieValue(response.Cookies(), registerPickupCookieName); pickup == "" {
+		t.Fatalf("expected decoy pickup cookie on silenced response (parity with new-email branch)")
 	}
 }
 
@@ -260,8 +264,8 @@ func TestRegisterRejectsExactDuplicateEmailHTMLFlow(t *testing.T) {
 		t.Fatalf("expected status 303, got %d", response.StatusCode)
 	}
 	location := response.Header.Get("Location")
-	if strings.TrimSpace(location) != "/register" {
-		t.Fatalf("expected redirect to /register, got %q", location)
+	if strings.TrimSpace(location) != "/register/welcome" {
+		t.Fatalf("expected redirect to /register/welcome, got %q", location)
 	}
 
 	if flashValue := responseCookieValue(response.Cookies(), flashCookieName); flashValue != "" {
@@ -272,6 +276,9 @@ func TestRegisterRejectsExactDuplicateEmailHTMLFlow(t *testing.T) {
 	}
 	if cookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName); cookie != "" {
 		t.Fatalf("expected no recovery cookie in silenced duplicate-email response, got %q", cookie)
+	}
+	if pickup := responseCookieValue(response.Cookies(), registerPickupCookieName); pickup == "" {
+		t.Fatalf("expected decoy pickup cookie on silenced duplicate-email response (parity with new-email branch)")
 	}
 
 	var usersCount int64

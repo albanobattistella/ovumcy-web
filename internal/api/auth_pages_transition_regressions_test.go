@@ -30,14 +30,30 @@ func TestRegisterInlineRecoveryStepRendersCopyDownloadAndContinueControls(t *tes
 	if response.StatusCode != http.StatusSeeOther {
 		t.Fatalf("expected status 303, got %d", response.StatusCode)
 	}
-	if location := response.Header.Get("Location"); location != "/register" {
-		t.Fatalf("expected redirect to /register, got %q", location)
+	if location := response.Header.Get("Location"); location != "/register/welcome" {
+		t.Fatalf("expected redirect to /register/welcome, got %q", location)
 	}
 
-	authCookie := responseCookieValue(response.Cookies(), authCookieName)
-	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
+	pickup := responseCookieValue(response.Cookies(), registerPickupCookieName)
+	if pickup == "" {
+		t.Fatalf("expected pickup cookie in register response")
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
+	pickupResponse, err := app.Test(pickupRequest, -1)
+	if err != nil {
+		t.Fatalf("pickup request failed: %v", err)
+	}
+	defer pickupResponse.Body.Close()
+	if pickupResponse.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected pickup status 303, got %d", pickupResponse.StatusCode)
+	}
+
+	authCookie := responseCookieValue(pickupResponse.Cookies(), authCookieName)
+	recoveryCookie := responseCookieValue(pickupResponse.Cookies(), recoveryCodeCookieName)
 	if authCookie == "" || recoveryCookie == "" {
-		t.Fatalf("expected auth and recovery cookies in register response")
+		t.Fatalf("expected auth and recovery cookies in pickup response")
 	}
 
 	recoveryRequest := httptest.NewRequest(http.MethodGet, "/register", nil)

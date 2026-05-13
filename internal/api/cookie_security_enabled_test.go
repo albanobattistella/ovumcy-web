@@ -82,16 +82,35 @@ func TestSecureRecoveryCookieEnabledWhenConfigured(t *testing.T) {
 	t.Parallel()
 
 	app, _ := newOnboardingTestAppWithCookieSecure(t, true)
-	response := mustAppResponse(t, app, secureCookieFormRequest(http.MethodPost, "/api/auth/register", url.Values{
+	registerResponse := mustAppResponse(t, app, secureCookieFormRequest(http.MethodPost, "/api/auth/register", url.Values{
 		"email":            {"recovery-cookie-secure@example.com"},
 		"password":         {"StrongPass1"},
 		"confirm_password": {"StrongPass1"},
 	}))
-	assertStatusCode(t, response, http.StatusSeeOther)
+	assertStatusCode(t, registerResponse, http.StatusSeeOther)
 
-	recoveryCookie := responseCookie(response.Cookies(), recoveryCodeCookieName)
+	pickupCookie := responseCookie(registerResponse.Cookies(), registerPickupCookieName)
+	if pickupCookie == nil {
+		t.Fatal("expected pickup cookie after successful register")
+	}
+	if !pickupCookie.HttpOnly {
+		t.Fatal("expected pickup cookie HttpOnly=true")
+	}
+	if !pickupCookie.Secure {
+		t.Fatal("expected pickup cookie Secure=true when COOKIE_SECURE is enabled")
+	}
+	if pickupCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected pickup cookie SameSite=Lax, got %v", pickupCookie.SameSite)
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickupCookie.Value)
+	pickupResponse := mustAppResponse(t, app, pickupRequest)
+	assertStatusCode(t, pickupResponse, http.StatusSeeOther)
+
+	recoveryCookie := responseCookie(pickupResponse.Cookies(), recoveryCodeCookieName)
 	if recoveryCookie == nil {
-		t.Fatal("expected recovery cookie after successful register")
+		t.Fatal("expected recovery cookie after pickup")
 	}
 	if !recoveryCookie.HttpOnly {
 		t.Fatal("expected recovery cookie HttpOnly=true")

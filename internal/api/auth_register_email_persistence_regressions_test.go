@@ -68,14 +68,35 @@ func TestRegisterInlineRecoveryConsumesStaleFlashCookie(t *testing.T) {
 
 	successResponse := mustAppResponse(t, app, successRequest)
 	assertStatusCode(t, successResponse, http.StatusSeeOther)
-	if location := successResponse.Header.Get("Location"); location != "/register" {
-		t.Fatalf("expected successful register redirect to /register, got %q", location)
+	if location := successResponse.Header.Get("Location"); location != "/register/welcome" {
+		t.Fatalf("expected successful register redirect to /register/welcome, got %q", location)
 	}
 
-	authCookie := responseCookieValue(successResponse.Cookies(), authCookieName)
-	recoveryCookie := responseCookieValue(successResponse.Cookies(), recoveryCodeCookieName)
+	pickupCookie := responseCookieValue(successResponse.Cookies(), registerPickupCookieName)
+	if pickupCookie == "" {
+		t.Fatalf("expected pickup cookie after successful register")
+	}
+	if cookie := responseCookieValue(successResponse.Cookies(), authCookieName); cookie != "" {
+		t.Fatalf("expected no auth cookie on POST register; got %q", cookie)
+	}
+	if cookie := responseCookieValue(successResponse.Cookies(), recoveryCodeCookieName); cookie != "" {
+		t.Fatalf("expected no recovery cookie on POST register; got %q", cookie)
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Accept-Language", "en")
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickupCookie)
+
+	pickupResponse := mustAppResponse(t, app, pickupRequest)
+	assertStatusCode(t, pickupResponse, http.StatusSeeOther)
+	if location := pickupResponse.Header.Get("Location"); location != "/register" {
+		t.Fatalf("expected pickup redirect to /register, got %q", location)
+	}
+
+	authCookie := responseCookieValue(pickupResponse.Cookies(), authCookieName)
+	recoveryCookie := responseCookieValue(pickupResponse.Cookies(), recoveryCodeCookieName)
 	if authCookie == "" || recoveryCookie == "" {
-		t.Fatalf("expected auth and recovery cookies after successful register")
+		t.Fatalf("expected auth and recovery cookies after pickup")
 	}
 
 	inlineRequest := httptest.NewRequest(http.MethodGet, "/register", nil)

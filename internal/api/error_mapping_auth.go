@@ -148,6 +148,10 @@ func authRecoveryCodePersistErrorSpec() APIErrorSpec {
 	return globalErrorSpec(fiber.StatusInternalServerError, APIErrorCategoryInternal, "failed to persist recovery code")
 }
 
+func registerPickupCookieErrorSpec() APIErrorSpec {
+	return globalErrorSpec(fiber.StatusInternalServerError, APIErrorCategoryInternal, "failed to issue register pickup")
+}
+
 func authOIDCUnavailableErrorSpec() APIErrorSpec {
 	return authFormErrorSpec(fiber.StatusServiceUnavailable, APIErrorCategoryInternal, "sso temporarily unavailable")
 }

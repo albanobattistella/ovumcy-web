@@ -59,9 +59,31 @@ func TestSecureCookiesDisabledByDefault(t *testing.T) {
 		t.Fatalf("expected register status 303, got %d", registerResponse.StatusCode)
 	}
 
-	recoveryCookie := responseCookie(registerResponse.Cookies(), recoveryCodeCookieName)
+	pickupCookie := responseCookie(registerResponse.Cookies(), registerPickupCookieName)
+	if pickupCookie == nil {
+		t.Fatal("expected pickup cookie after successful register")
+	}
+	if !pickupCookie.HttpOnly {
+		t.Fatal("expected pickup cookie HttpOnly=true")
+	}
+	if pickupCookie.Secure {
+		t.Fatal("expected pickup cookie Secure=false when COOKIE_SECURE is disabled")
+	}
+	if pickupCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected pickup cookie SameSite=Lax, got %v", pickupCookie.SameSite)
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickupCookie.Value)
+	pickupResponse, err := app.Test(pickupRequest, -1)
+	if err != nil {
+		t.Fatalf("pickup request failed: %v", err)
+	}
+	defer pickupResponse.Body.Close()
+
+	recoveryCookie := responseCookie(pickupResponse.Cookies(), recoveryCodeCookieName)
 	if recoveryCookie == nil {
-		t.Fatal("expected recovery cookie after successful register")
+		t.Fatal("expected recovery cookie after pickup")
 	}
 	if !recoveryCookie.HttpOnly {
 		t.Fatal("expected recovery cookie HttpOnly=true")

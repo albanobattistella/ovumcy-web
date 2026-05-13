@@ -17,6 +17,7 @@ func registerPageRoutes(app *fiber.App, handler *Handler) {
 	app.Get(oidcLogoutBridgePath, handler.ShowOIDCLogoutBridge)
 	app.Get(oidcLogoutBridgeRedirectPath, handler.RedirectOIDCLogout)
 	app.Get("/register", handler.ShowRegisterPage)
+	app.Get("/register/welcome", handler.PickupRegister)
 	app.Get("/recovery-code", handler.ShowRecoveryCodePage)
 	app.Get("/forgot-password", handler.ShowForgotPasswordPage)
 	app.Get("/reset-password", handler.ShowResetPasswordPage)

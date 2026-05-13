@@ -27,8 +27,35 @@ func TestRegisterJSONSuccessDoesNotExposeRecoveryCode(t *testing.T) {
 	assertStatusCode(t, response, http.StatusCreated)
 
 	payload := readRecoveryCodeFlowJSON(t, response)
-	assertRecoveryCodeIssuedViaSurface(t, payload, "/register")
-	assertRecoveryCodeTransportCookies(t, response)
+	if got, ok := payload["ok"].(bool); !ok || !got {
+		t.Fatalf("expected ok=true payload, got %#v", payload)
+	}
+	if got := stringValue(payload["next_step"]); got != "register_welcome" {
+		t.Fatalf("expected next_step register_welcome, got %#v", payload["next_step"])
+	}
+	if got := stringValue(payload["next_path"]); got != "/register/welcome" {
+		t.Fatalf("expected next_path /register/welcome, got %#v", payload["next_path"])
+	}
+	if _, exposed := payload["recovery_code"]; exposed {
+		t.Fatalf("did not expect recovery_code in JSON register response: %#v", payload)
+	}
+
+	pickup := responseCookieValue(response.Cookies(), registerPickupCookieName)
+	if pickup == "" {
+		t.Fatal("expected pickup cookie on register JSON response")
+	}
+	if cookie := responseCookieValue(response.Cookies(), authCookieName); cookie != "" {
+		t.Fatalf("expected no auth cookie on register JSON response; got %q", cookie)
+	}
+	if cookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName); cookie != "" {
+		t.Fatalf("expected no recovery cookie on register JSON response; got %q", cookie)
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
+	pickupResponse := mustAppResponse(t, app, pickupRequest)
+	assertStatusCode(t, pickupResponse, http.StatusSeeOther)
+	assertRecoveryCodeTransportCookies(t, pickupResponse)
 }
 
 func TestResetPasswordJSONSuccessDoesNotExposeRecoveryCode(t *testing.T) {
@@ -125,16 +152,29 @@ func TestRegisterInlineRecoveryStepConsumesCookieAfterFirstView(t *testing.T) {
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept-Language", "en")
 
-	response := mustAppResponse(t, app, request)
+	registerResponse := mustAppResponse(t, app, request)
+	assertStatusCode(t, registerResponse, http.StatusSeeOther)
+	if location := registerResponse.Header.Get("Location"); location != "/register/welcome" {
+		t.Fatalf("expected register success redirect /register/welcome, got %q", location)
+	}
+	pickup := responseCookieValue(registerResponse.Cookies(), registerPickupCookieName)
+	if pickup == "" {
+		t.Fatal("expected pickup cookie after registration")
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Accept-Language", "en")
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
+	response := mustAppResponse(t, app, pickupRequest)
 	assertStatusCode(t, response, http.StatusSeeOther)
 	if location := response.Header.Get("Location"); location != "/register" {
-		t.Fatalf("expected register success redirect /register, got %q", location)
+		t.Fatalf("expected pickup success redirect /register, got %q", location)
 	}
 
 	authCookie := responseCookieValue(response.Cookies(), authCookieName)
 	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
 	if authCookie == "" || recoveryCookie == "" {
-		t.Fatal("expected auth and recovery cookies after registration")
+		t.Fatal("expected auth and recovery cookies after pickup")
 	}
 
 	firstViewRequest := httptest.NewRequest(http.MethodGet, "/register", nil)
@@ -179,13 +219,23 @@ func TestRecoveryCodePageRedirectsInlineRegistrationSurfaceBackToRegister(t *tes
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept-Language", "en")
 
-	response := mustAppResponse(t, app, request)
+	registerResponse := mustAppResponse(t, app, request)
+	assertStatusCode(t, registerResponse, http.StatusSeeOther)
+	pickup := responseCookieValue(registerResponse.Cookies(), registerPickupCookieName)
+	if pickup == "" {
+		t.Fatal("expected pickup cookie after registration")
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Accept-Language", "en")
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
+	response := mustAppResponse(t, app, pickupRequest)
 	assertStatusCode(t, response, http.StatusSeeOther)
 
 	authCookie := responseCookieValue(response.Cookies(), authCookieName)
 	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
 	if authCookie == "" || recoveryCookie == "" {
-		t.Fatal("expected auth and recovery cookies after registration")
+		t.Fatal("expected auth and recovery cookies after pickup")
 	}
 
 	recoveryPageRequest := httptest.NewRequest(http.MethodGet, "/recovery-code", nil)
