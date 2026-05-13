@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/bits"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -131,12 +131,19 @@ func (payload registerPickupPayload) userID() (uint, error) {
 	if len(payload.UID) != 16 {
 		return 0, errors.New("invalid pickup uid")
 	}
-	// bits.UintSize selects 32 or 64 to match the platform uint width, so
-	// strconv.ParseUint rejects encoded values that would overflow the uint
-	// return type. That removes the need for a separate narrowing conversion.
-	value, err := strconv.ParseUint(payload.UID, 16, bits.UintSize)
+	// Parse as uint64, then explicitly bound-check against the platform
+	// uint width before narrowing. The guard is a no-op on 64-bit
+	// (math.MaxUint == math.MaxUint64) but catches the 32-bit case where
+	// a 16-hex-char encoded value could overflow uint=uint32. The check
+	// also satisfies CodeQL's go/incorrect-integer-conversion query, which
+	// flags uint64->uint narrowing without a visible upper bound regardless
+	// of the bitSize passed to ParseUint.
+	value, err := strconv.ParseUint(payload.UID, 16, 64)
 	if err != nil {
 		return 0, err
+	}
+	if value > math.MaxUint {
+		return 0, errors.New("pickup uid exceeds platform uint width")
 	}
 	return uint(value), nil
 }
