@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
+	"math/bits"
 	"strconv"
 	"strings"
 	"time"
@@ -49,7 +49,7 @@ func newRegisterPickupPayload(now time.Time, userID uint, recoveryCode string) (
 		return registerPickupPayload{}, err
 	}
 	return registerPickupPayload{
-		UID: fmt.Sprintf("%016x", uint64(userID)),
+		UID: fmt.Sprintf("%016x", userID),
 		RC:  rc,
 		EXP: expiresHex,
 	}, nil
@@ -85,36 +85,33 @@ func newRegisterPickupDecoyPayload(now time.Time) (registerPickupPayload, error)
 }
 
 // encodePickupExpiryHex renders the pickup expiry as a 16-char zero-padded hex
-// string. Wraps the int64 -> uint64 conversion required for unsigned hex
-// formatting behind an explicit non-negative check so gosec G115 does not flag
-// the conversion and so a clock anomaly (negative nanos) surfaces as an error
-// rather than silently overflowing into a far-future date.
+// string. Surfaces a clock anomaly (negative unix nanos) as an error instead
+// of silently formatting as "-<hex>" and breaking the fixed-width invariant
+// that the response-parity test depends on.
 func encodePickupExpiryHex(expires time.Time) (string, error) {
 	nanos := expires.UnixNano()
 	if nanos < 0 {
 		return "", errors.New("pickup expiry is before unix epoch")
 	}
-	// #nosec G115 -- guarded by the negative-check above; the source int64 fits uint64.
-	return fmt.Sprintf("%016x", uint64(nanos)), nil
+	return fmt.Sprintf("%016x", nanos), nil
 }
 
 // decodePickupExpiry parses the 16-char zero-padded hex back into a UTC time.
-// Range-checks uint64 against math.MaxInt64 before narrowing so gosec G115 is
-// satisfied and an attacker-supplied EXP of all-Fs returns an error instead of
-// silently wrapping to a negative time.
+// strconv.ParseInt with bitSize=64 rejects values that do not fit in int64
+// (an attacker-supplied "ffff...ff" returns an error), so no narrowing
+// conversion is needed.
 func decodePickupExpiry(encoded string) (time.Time, error) {
 	if len(encoded) != 16 {
 		return time.Time{}, errors.New("invalid pickup exp")
 	}
-	nanos, err := strconv.ParseUint(encoded, 16, 64)
+	nanos, err := strconv.ParseInt(encoded, 16, 64)
 	if err != nil {
 		return time.Time{}, err
 	}
-	if nanos > math.MaxInt64 {
-		return time.Time{}, errors.New("pickup expiry exceeds int64 range")
+	if nanos < 0 {
+		return time.Time{}, errors.New("invalid pickup exp")
 	}
-	// #nosec G115 -- guarded by the MaxInt64 check above.
-	return time.Unix(0, int64(nanos)).UTC(), nil
+	return time.Unix(0, nanos).UTC(), nil
 }
 
 func validPickupRecoveryCodeShape(code string) bool {
@@ -134,7 +131,10 @@ func (payload registerPickupPayload) userID() (uint, error) {
 	if len(payload.UID) != 16 {
 		return 0, errors.New("invalid pickup uid")
 	}
-	value, err := strconv.ParseUint(payload.UID, 16, 64)
+	// bits.UintSize selects 32 or 64 to match the platform uint width, so
+	// strconv.ParseUint rejects encoded values that would overflow the uint
+	// return type. That removes the need for a separate narrowing conversion.
+	value, err := strconv.ParseUint(payload.UID, 16, bits.UintSize)
 	if err != nil {
 		return 0, err
 	}
