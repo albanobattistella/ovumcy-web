@@ -752,6 +752,9 @@ func assertDefaultSecurityHeaders(t *testing.T, response *http.Response, expectS
 	if value := response.Header.Get(headerPermissionsPolicy); value != permissionsPolicyDefault {
 		t.Fatalf("expected %s=%q, got %q", headerPermissionsPolicy, permissionsPolicyDefault, value)
 	}
+	if value := response.Header.Get(headerCrossOriginOpenerPolicy); value != crossOriginOpenerPolicyDefault {
+		t.Fatalf("expected %s=%q, got %q", headerCrossOriginOpenerPolicy, crossOriginOpenerPolicyDefault, value)
+	}
 	if value := response.Header.Get(headerXFrameOptions); value != xFrameOptionsDeny {
 		t.Fatalf("expected %s=%q, got %q", headerXFrameOptions, xFrameOptionsDeny, value)
 	}
