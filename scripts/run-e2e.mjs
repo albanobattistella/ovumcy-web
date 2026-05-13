@@ -520,6 +520,7 @@ async function main() {
     COOKIE_SECURE: process.env.COOKIE_SECURE ?? (useHTTPSProxy ? "true" : "false"),
     RATE_LIMIT_LOGIN_MAX: process.env.RATE_LIMIT_LOGIN_MAX ?? "500",
     RATE_LIMIT_FORGOT_PASSWORD_MAX: process.env.RATE_LIMIT_FORGOT_PASSWORD_MAX ?? "500",
+    RATE_LIMIT_REGISTER_MAX: process.env.RATE_LIMIT_REGISTER_MAX ?? "500",
     RATE_LIMIT_API_MAX: process.env.RATE_LIMIT_API_MAX ?? "5000",
     OIDC_ENABLED: process.env.OIDC_ENABLED ?? (localOIDCProviderEnabled ? "true" : "false"),
     OIDC_ISSUER_URL: process.env.OIDC_ISSUER_URL ?? localOIDCIssuer,
