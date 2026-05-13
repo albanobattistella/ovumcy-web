@@ -117,7 +117,7 @@ func TestSetAndPopRegisterPickupCookieRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	handler := newPickupTestHandler(t)
-	now := time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	original, err := newRegisterPickupPayload(now, 99, "OVUM-AAAA-BBBB-CCCC")
 	if err != nil {
 		t.Fatalf("build payload: %v", err)
@@ -180,7 +180,7 @@ func TestPopRegisterPickupCookieWrongKeyReturnsEmpty(t *testing.T) {
 		cookieSecure: false,
 	}
 
-	now := time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	payload, err := newRegisterPickupPayload(now, 5, "OVUM-AAAA-BBBB-CCCC")
 	if err != nil {
 		t.Fatalf("build payload: %v", err)

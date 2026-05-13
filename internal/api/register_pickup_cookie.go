@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -43,10 +44,14 @@ func newRegisterPickupPayload(now time.Time, userID uint, recoveryCode string) (
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	expiresHex, err := encodePickupExpiryHex(now.UTC().Add(registerPickupCookieTTL))
+	if err != nil {
+		return registerPickupPayload{}, err
+	}
 	return registerPickupPayload{
 		UID: fmt.Sprintf("%016x", uint64(userID)),
 		RC:  rc,
-		EXP: fmt.Sprintf("%016x", uint64(now.UTC().Add(registerPickupCookieTTL).UnixNano())),
+		EXP: expiresHex,
 	}, nil
 }
 
@@ -68,11 +73,48 @@ func newRegisterPickupDecoyPayload(now time.Time) (registerPickupPayload, error)
 	}
 	rcHex := strings.ToUpper(hex.EncodeToString(rcBytes))
 	rc := "OVUM-" + rcHex[0:4] + "-" + rcHex[4:8] + "-" + rcHex[8:12]
+	expiresHex, err := encodePickupExpiryHex(now.UTC().Add(registerPickupCookieTTL))
+	if err != nil {
+		return registerPickupPayload{}, err
+	}
 	return registerPickupPayload{
 		UID: fmt.Sprintf("%016x", binary.BigEndian.Uint64(uidBytes)),
 		RC:  rc,
-		EXP: fmt.Sprintf("%016x", uint64(now.UTC().Add(registerPickupCookieTTL).UnixNano())),
+		EXP: expiresHex,
 	}, nil
+}
+
+// encodePickupExpiryHex renders the pickup expiry as a 16-char zero-padded hex
+// string. Wraps the int64 -> uint64 conversion required for unsigned hex
+// formatting behind an explicit non-negative check so gosec G115 does not flag
+// the conversion and so a clock anomaly (negative nanos) surfaces as an error
+// rather than silently overflowing into a far-future date.
+func encodePickupExpiryHex(expires time.Time) (string, error) {
+	nanos := expires.UnixNano()
+	if nanos < 0 {
+		return "", errors.New("pickup expiry is before unix epoch")
+	}
+	// #nosec G115 -- guarded by the negative-check above; the source int64 fits uint64.
+	return fmt.Sprintf("%016x", uint64(nanos)), nil
+}
+
+// decodePickupExpiry parses the 16-char zero-padded hex back into a UTC time.
+// Range-checks uint64 against math.MaxInt64 before narrowing so gosec G115 is
+// satisfied and an attacker-supplied EXP of all-Fs returns an error instead of
+// silently wrapping to a negative time.
+func decodePickupExpiry(encoded string) (time.Time, error) {
+	if len(encoded) != 16 {
+		return time.Time{}, errors.New("invalid pickup exp")
+	}
+	nanos, err := strconv.ParseUint(encoded, 16, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if nanos > math.MaxInt64 {
+		return time.Time{}, errors.New("pickup expiry exceeds int64 range")
+	}
+	// #nosec G115 -- guarded by the MaxInt64 check above.
+	return time.Unix(0, int64(nanos)).UTC(), nil
 }
 
 func validPickupRecoveryCodeShape(code string) bool {
@@ -100,14 +142,7 @@ func (payload registerPickupPayload) userID() (uint, error) {
 }
 
 func (payload registerPickupPayload) expiresAt() (time.Time, error) {
-	if len(payload.EXP) != 16 {
-		return time.Time{}, errors.New("invalid pickup exp")
-	}
-	nanos, err := strconv.ParseUint(payload.EXP, 16, 64)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return time.Unix(0, int64(nanos)).UTC(), nil
+	return decodePickupExpiry(payload.EXP)
 }
 
 func (payload registerPickupPayload) validAt(now time.Time) bool {
