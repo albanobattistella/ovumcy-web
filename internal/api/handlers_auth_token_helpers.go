@@ -106,6 +106,27 @@ func (handler *Handler) rotateOIDCLogoutState(c *fiber.Ctx, newSessionID string)
 	return handler.oidcLogoutStateSvc.Delete(oldSessionID)
 }
 
+// refreshCurrentSession re-issues the auth cookie for the request's user
+// after an operation that bumped auth_session_version, so the originating
+// device stays signed in while every other session is invalidated. The
+// `scope` argument is used for security-event logging only.
+func (handler *Handler) refreshCurrentSession(c *fiber.Ctx, user *models.User, scope string) error {
+	sessionID, err := handler.setAuthCookie(c, user, false)
+	if err != nil {
+		handler.clearAuthCookie(c)
+		spec := authSessionCreateErrorSpec()
+		if errors.Is(err, services.ErrAuthUnsupportedRole) {
+			spec = authWebSignInUnavailableErrorSpec()
+		}
+		handler.logSecurityError(c, scope, spec)
+		return handler.respondMappedError(c, spec)
+	}
+	if err := handler.rotateOIDCLogoutState(c, sessionID); err != nil {
+		handler.logSecurityEvent(c, scope, "provider_logout_state_rotation_failed")
+	}
+	return nil
+}
+
 func (handler *Handler) encodeAuthCookieToken(rawToken string) (string, error) {
 	rawToken = strings.TrimSpace(rawToken)
 	if rawToken == "" {

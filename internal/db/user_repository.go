@@ -151,11 +151,17 @@ func (repo *UserRepository) BumpAuthSessionVersion(userID uint) error {
 	return repo.database.Model(&models.User{}).Where("id = ?", userID).UpdateColumn("auth_session_version", gorm.Expr("auth_session_version + 1")).Error
 }
 
-func (repo *UserRepository) UpdateTOTPFields(userID uint, encryptedSecret string, enabled bool) error {
+// UpdateTOTPFieldsAndRevokeSessions atomically rewrites the TOTP-related
+// columns and increments auth_session_version, so every active auth cookie
+// for the user is invalidated in the same transaction. Both 2FA enable and
+// disable change the account's auth posture and therefore must invalidate
+// any session that was issued before the change.
+func (repo *UserRepository) UpdateTOTPFieldsAndRevokeSessions(userID uint, encryptedSecret string, enabled bool) error {
 	return repo.database.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]any{
-		"totp_secret":         encryptedSecret,
-		"totp_enabled":        enabled,
-		"totp_last_used_step": 0,
+		"totp_secret":          encryptedSecret,
+		"totp_enabled":         enabled,
+		"totp_last_used_step":  0,
+		"auth_session_version": gorm.Expr("auth_session_version + 1"),
 	}).Error
 }
 

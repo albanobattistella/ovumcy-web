@@ -19,6 +19,14 @@ type LoginWorkflowService interface {
 	Authenticate(secretKey []byte, clientKey string, email string, password string, resetTokenTTL time.Duration, now time.Time) (services.LoginResult, error)
 }
 
+// RegisterPickupTokenStore persists and atomically consumes the nonces that
+// back the sealed `ovumcy_register_pickup` cookie. The interface lets tests
+// substitute an in-memory implementation without spinning up a database.
+type RegisterPickupTokenStore interface {
+	Issue(nonce string, userID uint, expiresAt time.Time) error
+	Consume(nonce string, now time.Time) (uint, bool, error)
+}
+
 type OIDCWorkflowService interface {
 	Enabled() bool
 	LocalPublicAuthEnabled() bool
@@ -53,6 +61,7 @@ type Handler struct {
 	onboardingSvc        *services.OnboardingService
 	setupService         *services.SetupService
 	totpService          *services.TOTPService
+	registerPickupTokens RegisterPickupTokenStore
 }
 
 type CalendarDay struct {

@@ -33,7 +33,10 @@ var (
 
 // TOTPUserRepository is the minimal repository interface required by TOTPService.
 type TOTPUserRepository interface {
-	UpdateTOTPFields(userID uint, encryptedSecret string, enabled bool) error
+	// UpdateTOTPFieldsAndRevokeSessions writes the new TOTP-related columns AND
+	// bumps auth_session_version in the same transaction, so toggling 2FA
+	// invalidates every active auth cookie for the account.
+	UpdateTOTPFieldsAndRevokeSessions(userID uint, encryptedSecret string, enabled bool) error
 	// ClaimTOTPStep atomically advances totp_last_used_step to step iff it is
 	// strictly greater than the persisted value. Returns true when the row was
 	// updated (the step is now consumed by this caller) and false when the step
@@ -162,21 +165,25 @@ func findValidatedTOTPStep(rawSecret, code string, now time.Time) (int64, bool) 
 	return 0, false
 }
 
-// EnableTOTP encrypts rawSecret and stores it alongside totp_enabled=true for the user.
+// EnableTOTP encrypts rawSecret and stores it alongside totp_enabled=true for
+// the user. The underlying repository call also bumps auth_session_version so
+// every active auth cookie issued before 2FA was enabled is revoked.
 func (service *TOTPService) EnableTOTP(userID uint, rawSecret string) error {
 	encrypted, err := security.EncryptField(rawSecret, service.secretKey)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrTOTPSecretEncrypt, err)
 	}
-	if err := service.users.UpdateTOTPFields(userID, encrypted, true); err != nil {
+	if err := service.users.UpdateTOTPFieldsAndRevokeSessions(userID, encrypted, true); err != nil {
 		return fmt.Errorf("%w: %v", ErrTOTPUpdateFailed, err)
 	}
 	return nil
 }
 
 // DisableTOTP clears the TOTP secret and sets totp_enabled=false for the user.
+// As with EnableTOTP, this bumps auth_session_version so any session that
+// existed while 2FA was on is invalidated when 2FA is taken back off.
 func (service *TOTPService) DisableTOTP(userID uint) error {
-	if err := service.users.UpdateTOTPFields(userID, "", false); err != nil {
+	if err := service.users.UpdateTOTPFieldsAndRevokeSessions(userID, "", false); err != nil {
 		return fmt.Errorf("%w: %v", ErrTOTPUpdateFailed, err)
 	}
 	return nil

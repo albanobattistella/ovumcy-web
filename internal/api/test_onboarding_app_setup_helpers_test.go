@@ -149,6 +149,7 @@ func newTestHandlerDependencies(database *gorm.DB, i18nManager *i18n.Manager, op
 		OnboardingService:    onboardingService,
 		SetupService:         setupService,
 		TOTPService:          totpService,
+		RegisterPickupTokens: repositories.RegisterPickupTokens,
 	}
 }
 

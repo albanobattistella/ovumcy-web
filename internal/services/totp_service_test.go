@@ -25,7 +25,7 @@ type stubTOTPUserRepo struct {
 	lastClaimStep int64
 }
 
-func (stub *stubTOTPUserRepo) UpdateTOTPFields(userID uint, encryptedSecret string, enabled bool) error {
+func (stub *stubTOTPUserRepo) UpdateTOTPFieldsAndRevokeSessions(userID uint, encryptedSecret string, enabled bool) error {
 	stub.updateTOTPCalled = true
 	stub.updatedUserID = userID
 	stub.updatedSecret = encryptedSecret
@@ -117,7 +117,7 @@ func TestTOTPService_EnableTOTP_StoresEncryptedSecret(t *testing.T) {
 	}
 
 	if !repo.updateTOTPCalled {
-		t.Fatal("EnableTOTP() did not call UpdateTOTPFields")
+		t.Fatal("EnableTOTP() did not call UpdateTOTPFieldsAndRevokeSessions")
 	}
 	if repo.updatedUserID != 42 {
 		t.Errorf("userID = %d, want 42", repo.updatedUserID)
@@ -291,7 +291,7 @@ func TestTOTPService_DisableTOTP_ClearsFields(t *testing.T) {
 	}
 
 	if !repo.updateTOTPCalled {
-		t.Fatal("DisableTOTP() did not call UpdateTOTPFields")
+		t.Fatal("DisableTOTP() did not call UpdateTOTPFieldsAndRevokeSessions")
 	}
 	if repo.updatedUserID != 99 {
 		t.Errorf("userID = %d, want 99", repo.updatedUserID)

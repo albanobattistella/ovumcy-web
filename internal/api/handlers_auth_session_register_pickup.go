@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -17,14 +18,26 @@ const registerPickupNextPath = "/register/welcome"
 // respondRegisterPickup is the single point where the sealed cookie is
 // written. Build errors are extremely rare (rand.Reader failures) but are
 // surfaced consistently between branches.
+//
+// `userID` is set only on the real-pickup branch. respondRegisterPickup uses
+// it to persist a server-side single-use row in register_pickup_tokens
+// before the sealed cookie is set, so a captured cookie cannot be replayed
+// to mint a second auth session inside the 5-minute TTL (Finding #3 fix).
+// Decoy pickups deliberately skip the DB row: their nonce never resolves on
+// consume, which is observationally identical to a real pickup that has
+// already been consumed or expired.
 type registerPickupOutcome struct {
 	payload registerPickupPayload
+	userID  uint
 	err     error
 }
 
 func registerPickupOutcomeReal(now time.Time, userID uint, recoveryCode string) registerPickupOutcome {
-	payload, err := newRegisterPickupPayload(now, userID, recoveryCode)
-	return registerPickupOutcome{payload: payload, err: err}
+	if userID == 0 {
+		return registerPickupOutcome{err: errors.New("pickup outcome requires user id")}
+	}
+	payload, err := newRegisterPickupPayload(now, recoveryCode)
+	return registerPickupOutcome{payload: payload, userID: userID, err: err}
 }
 
 func registerPickupOutcomeDecoy(now time.Time) registerPickupOutcome {
@@ -38,6 +51,21 @@ func (handler *Handler) respondRegisterPickup(c *fiber.Ctx, outcome registerPick
 		handler.logSecurityError(c, "auth.register", spec)
 		return handler.respondMappedError(c, spec)
 	}
+
+	// Real pickups get a server-side single-use row so the welcome handler
+	// can atomically consume the nonce. Decoy pickups (userID == 0) skip the
+	// insert; their nonce never resolves and falls through to the same
+	// /login redirect as a stale or already-consumed pickup. This is the
+	// server-side guarantee that closes the cookie-replay window.
+	if outcome.userID != 0 {
+		expiresAt := time.Now().UTC().Add(registerPickupCookieTTL)
+		if err := handler.registerPickupTokens.Issue(outcome.payload.Nonce, outcome.userID, expiresAt); err != nil {
+			spec := registerPickupCookieErrorSpec()
+			handler.logSecurityError(c, "auth.register", spec)
+			return handler.respondMappedError(c, spec)
+		}
+	}
+
 	if err := handler.setRegisterPickupCookie(c, outcome.payload); err != nil {
 		spec := registerPickupCookieErrorSpec()
 		handler.logSecurityError(c, "auth.register", spec)
@@ -83,9 +111,16 @@ func (handler *Handler) PickupRegister(c *fiber.Ctx) error {
 		return handler.redirectToPostRegisterSignin(c, "missing_or_expired")
 	}
 
-	userID, err := payload.userID()
-	if err != nil || userID == 0 {
-		return handler.redirectToPostRegisterSignin(c, "invalid_uid")
+	// Atomic single-use consume: a captured cookie that has already been
+	// exchanged once, or a decoy whose nonce was never persisted, returns
+	// consumed == false here and falls through to the same neutral
+	// "register pickup unavailable" /login redirect.
+	userID, consumed, err := handler.registerPickupTokens.Consume(payload.Nonce, time.Now())
+	if err != nil {
+		return handler.redirectToPostRegisterSignin(c, "consume_failed")
+	}
+	if !consumed || userID == 0 {
+		return handler.redirectToPostRegisterSignin(c, "decoy_or_replay")
 	}
 
 	user, err := handler.authService.FindByID(userID)

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Register-pickup cookie is now single-use server-side. `POST /api/auth/register` persists an opaque nonce in a new `register_pickup_tokens` table, and `GET /register/welcome` atomically consumes it in the same UPDATE. A captured sealed `ovumcy_register_pickup` cookie can no longer be replayed within the 5-minute TTL to mint a second auth session — the second consume returns "already used" and falls through to the same neutral `/login` redirect as a decoy or expired pickup. Migration `022_register_pickup_tokens.sql`.
+- 2FA enable and disable now bump `users.auth_session_version` atomically with the TOTP-field update. Every other auth cookie issued before the toggle is invalidated on its next request; the originating session is refreshed inline so the user that performed the toggle stays signed in on their current device. Matches the existing contract for password change, password reset, and recovery-code regeneration.
+- OIDC `end_session_endpoint` is now host-pinned to the configured issuer. Discovery metadata that advertises an endpoint on a different host is rejected at provider load time, falling back to local-only logout. Closes a defense-in-depth gap where a compromised or look-alike discovery document could redirect the logout flow (including any `id_token_hint` carried in the URL) to an attacker-controlled host.
+- OIDC ID-token verifier now carries an explicit `SupportedSigningAlgs` allowlist (`RS256`, `RS384`, `RS512`, `ES256`, `ES384`, `ES512`, `PS256`, `PS384`, `PS512`, `EdDSA`). Symmetric algorithms and `none` cannot be negotiated even if the upstream provider advertises them, closing an algorithm-confusion downgrade lane.
+
 ## [0.9.4] - 2026-05-13
 
 ### Added

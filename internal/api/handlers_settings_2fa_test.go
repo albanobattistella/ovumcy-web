@@ -97,6 +97,10 @@ func TestShowTOTPSetupPage_TOTPEnabled_ShowsManagementView(t *testing.T) {
 	if err := svc.EnableTOTP(ctx.user.ID, "JBSWY3DPEHPK3PXP"); err != nil {
 		t.Fatalf("EnableTOTP: %v", err)
 	}
+	// EnableTOTP bumps auth_session_version atomically, so the pre-enable
+	// cookie is now stale. Refresh it to mirror what the real handler does
+	// when the user toggles 2FA from their own session.
+	ctx.refreshAuthCookie(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/settings/2fa", nil)
 	req.Header.Set("Accept-Language", "en")
@@ -245,6 +249,9 @@ func TestDisableTOTP2FA_CorrectPassword_DisablesTOTP(t *testing.T) {
 	if err := svc.EnableTOTP(ctx.user.ID, "JBSWY3DPEHPK3PXP"); err != nil {
 		t.Fatalf("EnableTOTP: %v", err)
 	}
+	// EnableTOTP bumped auth_session_version, so refresh the cookie before
+	// exercising the disable endpoint.
+	ctx.refreshAuthCookie(t)
 
 	form := url.Values{"password": {"StrongPass1"}}
 	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/2fa/disable", form, map[string]string{"Accept-Language": "en"})

@@ -2,12 +2,10 @@ package api
 
 import (
 	"crypto/rand"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -21,22 +19,32 @@ import (
 // natural 303 follow-up plus a brief stall.
 const registerPickupCookieTTL = 5 * time.Minute
 
+// registerPickupNonceBytes controls the entropy of the opaque per-pickup
+// nonce. 16 bytes (128 bits) is well above the birthday-collision floor for
+// the 5-minute window and the per-IP register rate limit, and is identical
+// for real and decoy payloads so the sealed cookie length stays oracle-safe.
+const registerPickupNonceBytes = 16
+
 // registerPickupPayload carries the state needed to materialize an auth
 // session and reveal a recovery code at GET /register/welcome. The payload is
 // serialized to JSON with FIXED-WIDTH string fields so that the resulting
 // ciphertext is byte-identical in length between a real new-user payload and
 // a decoy payload for a duplicate-email collision. This is what closes the
 // per-request Set-Cookie enumeration oracle on POST /api/auth/register.
+//
+// The Nonce field is opaque: for a real pickup it is the primary key of a
+// server-side `register_pickup_tokens` row whose Consume() call resolves to
+// the actual user_id and atomically marks the token used. For a decoy it is
+// random bytes that no row exists for, so Consume() returns "not found" and
+// the welcome handler falls through to the same /login redirect as a stale
+// or already-consumed pickup. This is the server-side single-use guarantee.
 type registerPickupPayload struct {
-	UID string `json:"uid"` // 16 hex chars: uint64 user id (zero-padded) or random bytes for decoy
-	RC  string `json:"rc"`  // 19 chars: OVUM-XXXX-XXXX-XXXX recovery code (real or decoy in matching shape)
-	EXP string `json:"exp"` // 16 hex chars: int64 unix nanos of expiry
+	Nonce string `json:"nonce"` // 32 hex chars: opaque single-use handle (real and decoy share this shape)
+	RC    string `json:"rc"`    // 19 chars: OVUM-XXXX-XXXX-XXXX recovery code (real or decoy in matching shape)
+	EXP   string `json:"exp"`   // 16 hex chars: int64 unix nanos of expiry
 }
 
-func newRegisterPickupPayload(now time.Time, userID uint, recoveryCode string) (registerPickupPayload, error) {
-	if userID == 0 {
-		return registerPickupPayload{}, errors.New("pickup payload requires user id")
-	}
+func newRegisterPickupPayload(now time.Time, recoveryCode string) (registerPickupPayload, error) {
 	rc := strings.TrimSpace(recoveryCode)
 	if !validPickupRecoveryCodeShape(rc) {
 		return registerPickupPayload{}, errors.New("pickup payload requires OVUM-XXXX-XXXX-XXXX recovery code")
@@ -44,14 +52,18 @@ func newRegisterPickupPayload(now time.Time, userID uint, recoveryCode string) (
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	nonce, err := generatePickupNonce()
+	if err != nil {
+		return registerPickupPayload{}, err
+	}
 	expiresHex, err := encodePickupExpiryHex(now.UTC().Add(registerPickupCookieTTL))
 	if err != nil {
 		return registerPickupPayload{}, err
 	}
 	return registerPickupPayload{
-		UID: fmt.Sprintf("%016x", userID),
-		RC:  rc,
-		EXP: expiresHex,
+		Nonce: nonce,
+		RC:    rc,
+		EXP:   expiresHex,
 	}, nil
 }
 
@@ -63,8 +75,8 @@ func newRegisterPickupDecoyPayload(now time.Time) (registerPickupPayload, error)
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	uidBytes := make([]byte, 8)
-	if _, err := rand.Read(uidBytes); err != nil {
+	nonce, err := generatePickupNonce()
+	if err != nil {
 		return registerPickupPayload{}, err
 	}
 	rcBytes := make([]byte, 6)
@@ -78,10 +90,21 @@ func newRegisterPickupDecoyPayload(now time.Time) (registerPickupPayload, error)
 		return registerPickupPayload{}, err
 	}
 	return registerPickupPayload{
-		UID: fmt.Sprintf("%016x", binary.BigEndian.Uint64(uidBytes)),
-		RC:  rc,
-		EXP: expiresHex,
+		Nonce: nonce,
+		RC:    rc,
+		EXP:   expiresHex,
 	}, nil
+}
+
+// generatePickupNonce returns a 32-hex-char (16-byte) random handle suitable
+// for the sealed-cookie payload and as the primary key of the corresponding
+// register_pickup_tokens row.
+func generatePickupNonce() (string, error) {
+	buffer := make([]byte, registerPickupNonceBytes)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buffer), nil
 }
 
 // encodePickupExpiryHex renders the pickup expiry as a 16-char zero-padded hex
@@ -127,27 +150,6 @@ func validPickupRecoveryCodeShape(code string) bool {
 	return true
 }
 
-func (payload registerPickupPayload) userID() (uint, error) {
-	if len(payload.UID) != 16 {
-		return 0, errors.New("invalid pickup uid")
-	}
-	// Parse as uint64, then explicitly bound-check against the platform
-	// uint width before narrowing. The guard is a no-op on 64-bit
-	// (math.MaxUint == math.MaxUint64) but catches the 32-bit case where
-	// a 16-hex-char encoded value could overflow uint=uint32. The check
-	// also satisfies CodeQL's go/incorrect-integer-conversion query, which
-	// flags uint64->uint narrowing without a visible upper bound regardless
-	// of the bitSize passed to ParseUint.
-	value, err := strconv.ParseUint(payload.UID, 16, 64)
-	if err != nil {
-		return 0, err
-	}
-	if value > math.MaxUint {
-		return 0, errors.New("pickup uid exceeds platform uint width")
-	}
-	return uint(value), nil
-}
-
 func (payload registerPickupPayload) expiresAt() (time.Time, error) {
 	return decodePickupExpiry(payload.EXP)
 }
@@ -163,7 +165,20 @@ func (payload registerPickupPayload) validAt(now time.Time) bool {
 	if !validPickupRecoveryCodeShape(strings.TrimSpace(payload.RC)) {
 		return false
 	}
-	return len(payload.UID) == 16
+	return validPickupNonceShape(payload.Nonce)
+}
+
+// validPickupNonceShape returns true when the nonce is the expected
+// 32-hex-char handle produced by generatePickupNonce. The shape check is
+// purely structural; cryptographic validation happens at Consume time.
+func validPickupNonceShape(nonce string) bool {
+	if len(nonce) != registerPickupNonceBytes*2 {
+		return false
+	}
+	if _, err := hex.DecodeString(nonce); err != nil {
+		return false
+	}
+	return true
 }
 
 func (handler *Handler) setRegisterPickupCookie(c *fiber.Ctx, payload registerPickupPayload) error {

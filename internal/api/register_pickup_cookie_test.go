@@ -21,15 +21,12 @@ func TestNewRegisterPickupPayloadShape(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC)
-	payload, err := newRegisterPickupPayload(now, 42, "OVUM-AAAA-BBBB-CCCC")
+	payload, err := newRegisterPickupPayload(now, "OVUM-AAAA-BBBB-CCCC")
 	if err != nil {
 		t.Fatalf("newRegisterPickupPayload: %v", err)
 	}
-	if len(payload.UID) != 16 {
-		t.Fatalf("expected UID length 16, got %d (%q)", len(payload.UID), payload.UID)
-	}
-	if payload.UID != "000000000000002a" {
-		t.Fatalf("expected hex uid for 42, got %q", payload.UID)
+	if !validPickupNonceShape(payload.Nonce) {
+		t.Fatalf("expected valid pickup nonce, got %q", payload.Nonce)
 	}
 	if payload.RC != "OVUM-AAAA-BBBB-CCCC" {
 		t.Fatalf("expected RC preserved, got %q", payload.RC)
@@ -45,11 +42,19 @@ func TestNewRegisterPickupPayloadShape(t *testing.T) {
 	}
 }
 
-func TestNewRegisterPickupPayloadRejectsZeroUserID(t *testing.T) {
+func TestNewRegisterPickupPayloadDrawsFreshNonce(t *testing.T) {
 	t.Parallel()
 
-	if _, err := newRegisterPickupPayload(time.Now(), 0, "OVUM-AAAA-BBBB-CCCC"); err == nil {
-		t.Fatal("expected error for userID=0")
+	first, err := newRegisterPickupPayload(time.Now(), "OVUM-AAAA-BBBB-CCCC")
+	if err != nil {
+		t.Fatalf("first payload: %v", err)
+	}
+	second, err := newRegisterPickupPayload(time.Now(), "OVUM-AAAA-BBBB-CCCC")
+	if err != nil {
+		t.Fatalf("second payload: %v", err)
+	}
+	if first.Nonce == second.Nonce {
+		t.Fatalf("expected unique nonces per pickup, got the same %q twice", first.Nonce)
 	}
 }
 
@@ -62,7 +67,7 @@ func TestNewRegisterPickupPayloadRejectsBadRecoveryCode(t *testing.T) {
 		"NOT-AAAA-BBBB-CCCC",
 		"OVUM-XXXXX-BBBB-CCCC",
 	} {
-		if _, err := newRegisterPickupPayload(time.Now(), 1, badCode); err == nil {
+		if _, err := newRegisterPickupPayload(time.Now(), badCode); err == nil {
 			t.Fatalf("expected error for recovery code %q", badCode)
 		}
 	}
@@ -79,36 +84,36 @@ func TestRegisterPickupRealAndDecoyMatchInLength(t *testing.T) {
 
 	now := time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC)
 
-	real1, err := newRegisterPickupPayload(now, 1, "OVUM-AAAA-BBBB-CCCC")
+	realA, err := newRegisterPickupPayload(now, "OVUM-AAAA-BBBB-CCCC")
 	if err != nil {
-		t.Fatalf("real payload (uid=1): %v", err)
+		t.Fatalf("real payload A: %v", err)
 	}
-	realBig, err := newRegisterPickupPayload(now, 0xDEADBEEF12345678, "OVUM-1234-5678-9ABC")
+	realB, err := newRegisterPickupPayload(now, "OVUM-1234-5678-9ABC")
 	if err != nil {
-		t.Fatalf("real payload (uid=big): %v", err)
+		t.Fatalf("real payload B: %v", err)
 	}
 	decoy, err := newRegisterPickupDecoyPayload(now)
 	if err != nil {
 		t.Fatalf("decoy payload: %v", err)
 	}
 
-	realBytes, err := json.Marshal(real1)
+	realABytes, err := json.Marshal(realA)
 	if err != nil {
-		t.Fatalf("marshal real1: %v", err)
+		t.Fatalf("marshal realA: %v", err)
 	}
-	realBigBytes, err := json.Marshal(realBig)
+	realBBytes, err := json.Marshal(realB)
 	if err != nil {
-		t.Fatalf("marshal realBig: %v", err)
+		t.Fatalf("marshal realB: %v", err)
 	}
 	decoyBytes, err := json.Marshal(decoy)
 	if err != nil {
 		t.Fatalf("marshal decoy: %v", err)
 	}
 
-	if len(realBytes) != len(decoyBytes) || len(realBytes) != len(realBigBytes) {
+	if len(realABytes) != len(decoyBytes) || len(realABytes) != len(realBBytes) {
 		t.Fatalf(
-			"serialized length mismatch: real1=%d realBig=%d decoy=%d",
-			len(realBytes), len(realBigBytes), len(decoyBytes),
+			"serialized length mismatch: realA=%d realB=%d decoy=%d",
+			len(realABytes), len(realBBytes), len(decoyBytes),
 		)
 	}
 }
@@ -118,7 +123,7 @@ func TestSetAndPopRegisterPickupCookieRoundTrip(t *testing.T) {
 
 	handler := newPickupTestHandler(t)
 	now := time.Now().UTC()
-	original, err := newRegisterPickupPayload(now, 99, "OVUM-AAAA-BBBB-CCCC")
+	original, err := newRegisterPickupPayload(now, "OVUM-AAAA-BBBB-CCCC")
 	if err != nil {
 		t.Fatalf("build payload: %v", err)
 	}
@@ -163,7 +168,7 @@ func TestSetAndPopRegisterPickupCookieRoundTrip(t *testing.T) {
 	if !poppedOK {
 		t.Fatal("expected popRegisterPickupCookie to succeed")
 	}
-	if popped.UID != original.UID || popped.RC != original.RC || popped.EXP != original.EXP {
+	if popped.Nonce != original.Nonce || popped.RC != original.RC || popped.EXP != original.EXP {
 		t.Fatalf("payload not preserved across round-trip: got %+v want %+v", popped, original)
 	}
 }
@@ -181,7 +186,7 @@ func TestPopRegisterPickupCookieWrongKeyReturnsEmpty(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	payload, err := newRegisterPickupPayload(now, 5, "OVUM-AAAA-BBBB-CCCC")
+	payload, err := newRegisterPickupPayload(now, "OVUM-AAAA-BBBB-CCCC")
 	if err != nil {
 		t.Fatalf("build payload: %v", err)
 	}

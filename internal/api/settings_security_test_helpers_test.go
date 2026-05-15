@@ -80,6 +80,22 @@ func newOIDCOnlySettingsSecurityTestContext(t *testing.T, email string) settings
 	}
 }
 
+// refreshAuthCookie re-issues the context's auth cookie against the latest
+// auth_session_version persisted for the user. Tests that mutate the user row
+// via a back-door service call (for example, enabling TOTP directly through
+// services.TOTPService) need to invoke this so the cookie they carry forward
+// matches the freshly bumped session version, instead of being rejected as a
+// revoked session by AuthRequired.
+func (ctx *settingsSecurityTestContext) refreshAuthCookie(t *testing.T) {
+	t.Helper()
+	var reloaded models.User
+	if err := ctx.database.First(&reloaded, ctx.user.ID).Error; err != nil {
+		t.Fatalf("reload user for auth refresh: %v", err)
+	}
+	ctx.user = reloaded
+	ctx.authCookie = issueAuthCookieForUser(t, reloaded)
+}
+
 func loadSettingsCSRFContext(t *testing.T, app *fiber.App, authCookie string) (*http.Cookie, string) {
 	t.Helper()
 

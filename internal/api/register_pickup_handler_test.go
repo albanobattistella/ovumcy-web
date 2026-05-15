@@ -112,20 +112,25 @@ func TestPickupRegisterReplayedCookieRedirectsToLogin(t *testing.T) {
 		t.Fatalf("expected first pickup use to succeed; got Location=%q status=%d", location, firstUseResponse.StatusCode)
 	}
 
-	// Replay: same pickup value submitted again (server has no replay-state, so
-	// we can't enforce "exactly once" at the database level, but the wave of
-	// regression coverage at least documents what does happen. The pickup
-	// cookie is value-decryptable so the second use still resolves to the real
-	// user; what we DO assert is that the legitimate flow still completes
-	// without leaking anything new. Note: this exposes a defense-in-depth gap
-	// — see SECURITY.md "Register enumeration" residual.
+	// Replay: same pickup value submitted again must be rejected. The nonce
+	// inside the sealed cookie maps to a server-side register_pickup_tokens
+	// row that the first /register/welcome call atomically marked consumed,
+	// so the second consume returns "not found / already used" and we fall
+	// through to the same neutral /login redirect as a stale or decoy
+	// pickup. This is the runtime contract that closes Finding #3
+	// (register-pickup replay window).
 	replayRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
 	replayRequest.Header.Set("Accept-Language", "en")
 	replayRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
 	replayResponse := mustAppResponse(t, app, replayRequest)
-	location := replayResponse.Header.Get("Location")
-	if location != "/register" && location != "/login" {
-		t.Fatalf("expected replay to redirect to /register or /login, got %q", location)
+	if location := replayResponse.Header.Get("Location"); location != "/login" {
+		t.Fatalf("expected replay to redirect to /login, got %q", location)
+	}
+	if cookie := responseCookieValue(replayResponse.Cookies(), authCookieName); cookie != "" {
+		t.Fatalf("replay must not mint a second auth cookie; got %q", cookie)
+	}
+	if cookie := responseCookieValue(replayResponse.Cookies(), recoveryCodeCookieName); cookie != "" {
+		t.Fatalf("replay must not mint a recovery-code cookie; got %q", cookie)
 	}
 }
 

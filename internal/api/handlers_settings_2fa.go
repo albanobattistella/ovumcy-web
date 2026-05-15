@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/ovumcy/ovumcy-web/internal/services"
 )
 
 const totpIssuer = "Ovumcy"
@@ -99,6 +100,16 @@ func (handler *Handler) VerifyTOTP2FAEnrollment(c *fiber.Ctx) error {
 		return handler.respondMappedError(c, totpInternalErrorSpec())
 	}
 
+	// EnableTOTP atomically bumped auth_session_version on the user row; mirror
+	// the bump in memory and re-issue the auth cookie so this device stays
+	// signed in while every other session that existed before 2FA was enabled
+	// is invalidated on its next request.
+	user.AuthSessionVersion = services.NormalizeAuthSessionVersion(user.AuthSessionVersion) + 1
+	user.TOTPEnabled = true
+	if err := handler.refreshCurrentSession(c, user, "settings.2fa.verify"); err != nil {
+		return err
+	}
+
 	handler.clearTOTPSetupCookie(c)
 	handler.logSecurityEvent(c, "settings.2fa.verify", "enabled")
 
@@ -142,6 +153,16 @@ func (handler *Handler) DisableTOTP2FA(c *fiber.Ctx) error {
 	if err := handler.totpService.DisableTOTP(user.ID); err != nil {
 		handler.logSecurityError(c, "settings.2fa.disable", totpInternalErrorSpec())
 		return handler.respondMappedError(c, totpInternalErrorSpec())
+	}
+
+	// DisableTOTP bumped auth_session_version atomically; mirror the bump in
+	// memory and refresh this device's cookie so every other session that
+	// existed while 2FA was on is invalidated.
+	user.AuthSessionVersion = services.NormalizeAuthSessionVersion(user.AuthSessionVersion) + 1
+	user.TOTPEnabled = false
+	user.TOTPSecret = ""
+	if err := handler.refreshCurrentSession(c, user, "settings.2fa.disable"); err != nil {
+		return err
 	}
 
 	handler.logSecurityEvent(c, "settings.2fa.disable", "disabled")

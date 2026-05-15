@@ -26,6 +26,7 @@ type Dependencies struct {
 	OnboardingService    *services.OnboardingService
 	SetupService         *services.SetupService
 	TOTPService          *services.TOTPService
+	RegisterPickupTokens RegisterPickupTokenStore
 }
 
 func (dependencies Dependencies) validate() error {
@@ -62,6 +63,7 @@ func (dependencies Dependencies) requirements() []dependencyRequirement {
 		{value: dependencies.OnboardingService, message: "onboarding service is required"},
 		{value: dependencies.SetupService, message: "setup service is required"},
 		{value: dependencies.TOTPService, message: "totp service is required"},
+		{value: dependencies.RegisterPickupTokens, message: "register pickup token store is required"},
 	}
 }
 
@@ -98,5 +100,6 @@ func (handler *Handler) withDependencies(dependencies Dependencies) *Handler {
 	handler.onboardingSvc = dependencies.OnboardingService
 	handler.setupService = dependencies.SetupService
 	handler.totpService = dependencies.TOTPService
+	handler.registerPickupTokens = dependencies.RegisterPickupTokens
 	return handler
 }

@@ -397,7 +397,7 @@ func (client *OIDCClient) loadProvider(ctx context.Context) (*oauth2.Config, *oi
 
 	metadata := oidcProviderMetadata{}
 	if claimsErr := provider.Claims(&metadata); claimsErr == nil {
-		metadata.EndSessionEndpoint = sanitizeOIDCEndSessionEndpoint(metadata.EndSessionEndpoint)
+		metadata.EndSessionEndpoint = sanitizeOIDCEndSessionEndpoint(metadata.EndSessionEndpoint, client.config.IssuerURL)
 	}
 
 	client.provider = provider
@@ -410,10 +410,31 @@ func (client *OIDCClient) loadProvider(ctx context.Context) (*oauth2.Config, *oi
 		Scopes:       []string{oidc.ScopeOpenID, "email"},
 	}
 	client.verifier = provider.Verifier(&oidc.Config{
-		ClientID: client.config.ClientID,
+		ClientID:             client.config.ClientID,
+		SupportedSigningAlgs: oidcSupportedSigningAlgs(),
 	})
 
 	return client.oauthConfig, client.verifier, nil
+}
+
+// oidcSupportedSigningAlgs returns the asymmetric JWS algorithms Ovumcy
+// accepts on ID tokens. Symmetric algorithms (HS*) and "none" are excluded so
+// a malicious or downgraded provider cannot trick the verifier into accepting
+// a token signed with a known-public RSA/EC JWKS key as if it were a shared
+// HMAC secret (algorithm confusion).
+func oidcSupportedSigningAlgs() []string {
+	return []string{
+		oidc.RS256,
+		oidc.RS384,
+		oidc.RS512,
+		oidc.ES256,
+		oidc.ES384,
+		oidc.ES512,
+		oidc.PS256,
+		oidc.PS384,
+		oidc.PS512,
+		oidc.EdDSA,
+	}
 }
 
 func sanitizeOIDCConfig(config OIDCConfig) OIDCConfig {
@@ -473,7 +494,22 @@ func isValidProvisioningDomain(rawDomain string) bool {
 	return true
 }
 
-func sanitizeOIDCEndSessionEndpoint(rawEndpoint string) string {
+// sanitizeOIDCEndSessionEndpoint validates a provider-supplied
+// `end_session_endpoint` from discovery metadata. The endpoint MUST be:
+//   - absolute, HTTPS, no fragment;
+//   - same origin (scheme + host + effective port) as the configured
+//     issuer URL.
+//
+// The same-origin pin is critical: without it, a malicious or compromised
+// discovery document could redirect the user's logout flow (including any
+// `id_token_hint` carried in the URL) to an attacker-controlled host. The
+// rest of the OIDC code assumes that whatever survives this function comes
+// from the same authority that issued the ID token.
+//
+// When issuerURL is empty (constant-time discovery / tests / legacy callers
+// that have no issuer to pin against), the function only enforces the
+// HTTPS-and-no-fragment shape and returns the endpoint unchanged.
+func sanitizeOIDCEndSessionEndpoint(rawEndpoint string, issuerURL string) string {
 	endpoint := strings.TrimSpace(rawEndpoint)
 	if endpoint == "" {
 		return ""
@@ -484,6 +520,18 @@ func sanitizeOIDCEndSessionEndpoint(rawEndpoint string) string {
 		return ""
 	}
 	if !strings.EqualFold(parsed.Scheme, "https") || parsed.Fragment != "" {
+		return ""
+	}
+
+	issuer := strings.TrimSpace(issuerURL)
+	if issuer == "" {
+		return parsed.String()
+	}
+	parsedIssuer, err := url.Parse(issuer)
+	if err != nil || !parsedIssuer.IsAbs() {
+		return ""
+	}
+	if !sameOriginURL(parsed, parsedIssuer) {
 		return ""
 	}
 	return parsed.String()

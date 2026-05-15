@@ -68,14 +68,36 @@ func TestValidateOIDCHTTPSURLAcceptsAbsoluteHTTPSURL(t *testing.T) {
 func TestSanitizeOIDCEndSessionEndpoint(t *testing.T) {
 	t.Parallel()
 
-	if got := sanitizeOIDCEndSessionEndpoint("https://id.example.com/logout?client=ovumcy"); got != "https://id.example.com/logout?client=ovumcy" {
-		t.Fatalf("expected https endpoint with query to remain intact, got %q", got)
+	const issuer = "https://id.example.com"
+
+	if got := sanitizeOIDCEndSessionEndpoint("https://id.example.com/logout?client=ovumcy", issuer); got != "https://id.example.com/logout?client=ovumcy" {
+		t.Fatalf("expected same-origin https endpoint with query to remain intact, got %q", got)
 	}
-	if got := sanitizeOIDCEndSessionEndpoint("http://id.example.com/logout"); got != "" {
+	if got := sanitizeOIDCEndSessionEndpoint("http://id.example.com/logout", issuer); got != "" {
 		t.Fatalf("expected insecure endpoint to be rejected, got %q", got)
 	}
-	if got := sanitizeOIDCEndSessionEndpoint("https://id.example.com/logout#frag"); got != "" {
+	if got := sanitizeOIDCEndSessionEndpoint("https://id.example.com/logout#frag", issuer); got != "" {
 		t.Fatalf("expected fragment endpoint to be rejected, got %q", got)
+	}
+	// Cross-origin endpoint MUST be rejected even when its scheme and shape are
+	// otherwise valid: discovery metadata that points the logout flow at a
+	// host other than the configured issuer is an open-redirect / id-token-
+	// hint-leak vector. This is the host-pin contract that closes Finding #1.
+	if got := sanitizeOIDCEndSessionEndpoint("https://attacker.example/logout", issuer); got != "" {
+		t.Fatalf("expected cross-origin endpoint to be rejected, got %q", got)
+	}
+	if got := sanitizeOIDCEndSessionEndpoint("https://id.example.com.attacker.example/logout", issuer); got != "" {
+		t.Fatalf("expected look-alike host to be rejected, got %q", got)
+	}
+	// Endpoint on the same host but on a different explicit port is not the
+	// issuer's origin and must also be rejected.
+	if got := sanitizeOIDCEndSessionEndpoint("https://id.example.com:8443/logout", issuer); got != "" {
+		t.Fatalf("expected port-mismatched endpoint to be rejected, got %q", got)
+	}
+	// When called without an issuer to pin against the function still enforces
+	// the HTTPS-and-no-fragment shape but tolerates any host.
+	if got := sanitizeOIDCEndSessionEndpoint("https://id.example.com/logout", ""); got != "https://id.example.com/logout" {
+		t.Fatalf("expected sanitizer without issuer pin to keep https endpoint, got %q", got)
 	}
 }
 

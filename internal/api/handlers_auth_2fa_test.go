@@ -35,11 +35,12 @@ func setupTOTPForUser(t *testing.T, database *gorm.DB, userID uint, secretKey []
 // dbUserRepoForTest adapts *gorm.DB to services.TOTPUserRepository for test setup.
 type dbUserRepoForTest struct{ db *gorm.DB }
 
-func (r *dbUserRepoForTest) UpdateTOTPFields(userID uint, encryptedSecret string, enabled bool) error {
+func (r *dbUserRepoForTest) UpdateTOTPFieldsAndRevokeSessions(userID uint, encryptedSecret string, enabled bool) error {
 	return r.db.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]any{
-		"totp_secret":         encryptedSecret,
-		"totp_enabled":        enabled,
-		"totp_last_used_step": 0,
+		"totp_secret":          encryptedSecret,
+		"totp_enabled":         enabled,
+		"totp_last_used_step":  0,
+		"auth_session_version": gorm.Expr("auth_session_version + 1"),
 	}).Error
 }
 

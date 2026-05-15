@@ -283,6 +283,7 @@ func buildDependencies(repositories *db.Repositories, i18nManager *i18n.Manager,
 		OnboardingService:    services.NewOnboardingService(repositories.Users),
 		SetupService:         services.NewSetupService(repositories.Users),
 		TOTPService:          totpService,
+		RegisterPickupTokens: repositories.RegisterPickupTokens,
 	}
 }
 

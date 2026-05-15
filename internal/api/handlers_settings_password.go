@@ -219,20 +219,7 @@ func parseChangePasswordInput(c *fiber.Ctx) (changePasswordInput, error) {
 }
 
 func (handler *Handler) refreshPasswordChangeSession(c *fiber.Ctx, user *models.User) error {
-	sessionID, err := handler.setAuthCookie(c, user, false)
-	if err != nil {
-		handler.clearAuthCookie(c)
-		spec := authSessionCreateErrorSpec()
-		if errors.Is(err, services.ErrAuthUnsupportedRole) {
-			spec = authWebSignInUnavailableErrorSpec()
-		}
-		handler.logSecurityError(c, "auth.password_change", spec)
-		return handler.respondMappedError(c, spec)
-	}
-	if err := handler.rotateOIDCLogoutState(c, sessionID); err != nil {
-		handler.logSecurityEvent(c, "auth.password_change", "provider_logout_state_rotation_failed")
-	}
-	return nil
+	return handler.refreshCurrentSession(c, user, "auth.password_change")
 }
 
 func (handler *Handler) respondPasswordChangeError(c *fiber.Ctx, err error) error {
