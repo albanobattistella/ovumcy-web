@@ -31,5 +31,17 @@ export default [
       sourceType: "module",
       globals: globals.node
     }
+  },
+  {
+    files: ["web/src/js/__tests__/**/*.mjs"],
+    ...js.configs.recommended,
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        setImmediate: "readonly"
+      }
+    }
   }
 ];

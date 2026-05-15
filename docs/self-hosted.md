@@ -353,6 +353,16 @@ For the public reverse-proxy example stacks, run the same `docker compose pull`,
 
 Keep `OVUMCY_IMAGE` on a concrete release tag and update it intentionally during upgrades instead of relying on a floating `latest`.
 
+### Downgrade Caveats
+
+Migrations are forward-only. There is no `down.sql` and no automated rollback path. In practice most additive migrations (`ALTER TABLE ... ADD COLUMN ... NOT NULL DEFAULT ...`, `CREATE TABLE IF NOT EXISTS ...`) are downgrade-safe: an older Ovumcy binary simply ignores the new columns and tables. The two cases that warrant operator attention are:
+
+- **Migration `019_canonicalize_date_fields_utc.sql` (v0.6.x baseline)** rewrites `daily_logs.date` and `users.last_period_start` so the stored values are UTC-midnight. Versions newer than 019 assume that invariant in their calendar/range queries. If you downgrade to a binary that predates 019 and then continue writing data, the new (older) binary may persist non-canonical timestamps; a subsequent re-upgrade will then see a mix of canonical and non-canonical rows and calendar views can drift by a timezone offset until the rows are normalized. Treat a downgrade past 019 as a one-way operation unless you also restore the database from a pre-019 backup.
+
+- **Migration `022_register_pickup_tokens.sql` (v0.9.5)** introduces server-side single-use tracking for the `ovumcy_register_pickup` cookie. A downgraded binary that predates 022 still issues registration pickup cookies but does not insert rows into `register_pickup_tokens`. If you then re-upgrade, new registrations issued by the older binary cannot be exchanged on the welcome endpoint — the user falls through to `/login` and must re-register or sign in normally. This is a UX trade-off, not a security regression.
+
+If you need to downgrade through one of these migrations, restore the database from a backup taken before the migration was applied. Keep an "upgrade-paired" backup file alongside the image-tag bump in your runbook so a rollback in either direction is a single restore-from-backup step.
+
 ## Troubleshooting Baseline
 
 Use this order when something looks wrong:
