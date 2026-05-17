@@ -1,0 +1,1517 @@
+openapi: 3.1.0
+
+info:
+  title: Ovumcy API
+  version: 0.9.5
+  summary: HTTP API surface of the ovumcy-web self-hosted deployment.
+  description: |
+    This document specifies the **current** state of the JSON-emitting HTTP
+    surface of `ovumcy-web`. It is the authoritative description of what the
+    server actually serves today.
+
+    Stability — per [CONTRIBUTING.md](../CONTRIBUTING.md#api-stability-contract):
+
+    - `/api/*` and the state-changing endpoints that historically live outside
+      `/api/*` (`/settings/cycle`, `/onboarding/*`) are the HTMX backend, not a
+      stable third-party API.
+    - Field additions are non-breaking and may ship in any release.
+    - Field renames, removals, status code changes, route moves, and error key
+      changes may ship in any minor release without a deprecation cycle.
+    - The export payload (`/api/export/*`) follows the separate stability
+      contract documented in [docs/export.md](export.md).
+
+    Content negotiation — every endpoint serves both JSON and HTML/HTMX from the
+    same handler. This document covers **only** the JSON contract. Clients must
+    send `Accept: application/json` to opt into the JSON shape. Without that
+    header the server returns HTML or `303` redirects suitable for browser
+    navigation, and the corresponding response is not part of this contract.
+
+    Authentication & authorization — most endpoints require the sealed
+    `ovumcy_auth` session cookie issued by `POST /api/auth/login`. Endpoints
+    marked **owner only** additionally require the caller's `role` to be
+    `owner`; non-owner roles receive `403`. State-changing endpoints also
+    require a valid CSRF token. See [SECURITY.md](../SECURITY.md#cookies) for
+    cookie attributes and [SECURITY.md#password--auth-policy](../SECURITY.md#password--auth-policy)
+    for session semantics.
+
+    Rate limits — `/api/auth/*` endpoints carry per-IP HTTP rate limits with
+    additional per-account budgets enforced by `AuthAttemptPolicy`. Specific
+    defaults are listed in [SECURITY.md#rate-limits](../SECURITY.md#rate-limits).
+
+    Errors — all errors share the shape `{ "error": "<key>" }`. Error keys are
+    namespaced strings (`"auth.invalid_credentials"`, `"unauthorized"`,
+    `"invalid input"`, etc.). Clients should branch on the HTTP status code,
+    not the key string, and treat unknown keys as their generic status-class
+    failure.
+
+    Page routes (`/login`, `/dashboard`, `/calendar`, etc.) are **not** part of
+    this specification. They serve HTML to browsers only.
+  license:
+    name: AGPL-3.0
+    identifier: AGPL-3.0
+  contact:
+    name: Ovumcy security
+    url: https://github.com/ovumcy/ovumcy-web/blob/main/SECURITY.md
+    email: contact@ovumcy.com
+
+servers:
+  - url: https://{deployment}
+    description: Self-hosted Ovumcy instance.
+    variables:
+      deployment:
+        default: ovumcy.example.com
+        description: Hostname of your self-hosted Ovumcy deployment.
+
+tags:
+  - name: meta
+    description: Liveness and language preference.
+  - name: auth
+    description: Session lifecycle — sign-up, sign-in, sign-out, 2FA, password reset.
+  - name: onboarding
+    description: First-run setup wizard. Currently lives at `/onboarding/*` outside the `/api` prefix.
+  - name: days
+    description: Daily health log entries (one per calendar day, in the user's timezone).
+  - name: dailyLog
+    description: Bulk delete of the entire daily log.
+  - name: symptoms
+    description: Owner-managed symptom catalog.
+  - name: stats
+    description: Aggregated cycle statistics.
+  - name: export
+    description: CSV / JSON / summary export. See docs/export.md.
+  - name: settings
+    description: Profile, account settings, and security controls.
+  - name: settings-cycle
+    description: Cycle settings. Currently lives at `POST /settings/cycle` outside the `/api` prefix.
+
+security:
+  - sessionCookie: []
+    csrfToken: []
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: ovumcy_auth
+      description: |
+        Sealed session cookie issued by `POST /api/auth/login` (or by completing
+        the OIDC sign-in flow). Verified against `users.auth_session_version` on
+        every request. See [SECURITY.md](../SECURITY.md#cookies).
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: |
+        Double-submit CSRF token validated against the `ovumcy_csrf` cookie.
+        Browser clients usually submit it via the `csrf_token` form field
+        instead of the header. Pure-GET, register/login/forgot-password
+        request paths, and the `/auth/oidc/callback` provider form-post path
+        are exempt. See [CSRF middleware configuration](../cmd/ovumcy/main.go).
+
+  parameters:
+    DateParam:
+      name: date
+      in: path
+      required: true
+      description: Calendar day in the user's timezone, ISO 8601 (`YYYY-MM-DD`).
+      schema:
+        type: string
+        format: date
+        example: "2026-05-17"
+    FromQuery:
+      name: from
+      in: query
+      required: false
+      description: Range start (inclusive), `YYYY-MM-DD` in the user's timezone.
+      schema:
+        type: string
+        format: date
+    ToQuery:
+      name: to
+      in: query
+      required: false
+      description: Range end (inclusive), `YYYY-MM-DD` in the user's timezone.
+      schema:
+        type: string
+        format: date
+    SymptomId:
+      name: id
+      in: path
+      required: true
+      description: Symptom row identifier.
+      schema:
+        type: integer
+        format: uint64
+        minimum: 1
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid session cookie.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          example: { error: "unauthorized" }
+    Forbidden:
+      description: Session is valid but the caller lacks the required role (typically owner-only) or CSRF validation failed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          example: { error: "forbidden" }
+    ValidationError:
+      description: Request body or query parameters failed validation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          example: { error: "invalid input" }
+    RateLimited:
+      description: Rate limit exceeded.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          example: { error: "too many attempts" }
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          example: { error: "internal error" }
+
+  schemas:
+    ApiError:
+      type: object
+      description: |
+        Standard error envelope. `error` is a namespaced key — clients should
+        branch on the HTTP status code, not the string value, and treat unknown
+        keys as their generic status-class failure.
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "auth.invalid_credentials"
+      additionalProperties: false
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+      additionalProperties: false
+
+    OkRedirectResponse:
+      type: object
+      required: [ok, redirect]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        redirect:
+          type: string
+          description: Suggested next URL path for the client to follow.
+          example: "/auth/oidc/logout"
+      additionalProperties: false
+
+    RegisterRequest:
+      type: object
+      required: [email, password, confirm_password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Account email. Normalized server-side (lowercased, trimmed).
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: Must satisfy the password policy — 8+ Unicode code points, at least one uppercase letter, one lowercase letter, and one digit.
+        confirm_password:
+          type: string
+          format: password
+      additionalProperties: false
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        remember_me:
+          type: boolean
+          default: false
+          description: When true, the issued `ovumcy_auth` cookie carries an explicit ~7-day Expires. Otherwise the cookie is browser-session-scoped.
+      additionalProperties: false
+
+    LoginTOTPRequiredResponse:
+      type: object
+      description: Returned when the password is correct and the account has TOTP 2FA enabled. The caller must follow up with `POST /api/auth/2fa`.
+      required: [requires_totp]
+      properties:
+        requires_totp:
+          type: boolean
+          enum: [true]
+      additionalProperties: false
+
+    TOTPLoginRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: 6-digit code from the user's TOTP authenticator.
+      additionalProperties: false
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email, recovery_code]
+      properties:
+        email:
+          type: string
+          format: email
+        recovery_code:
+          type: string
+          pattern: "^OVUM-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$"
+          description: Single-use recovery code minted at registration or by `POST /api/settings/regenerate-recovery-code`.
+      additionalProperties: false
+
+    ResetPasswordRequest:
+      type: object
+      required: [password, confirm_password]
+      properties:
+        password:
+          type: string
+          format: password
+          minLength: 8
+        confirm_password:
+          type: string
+          format: password
+          minLength: 8
+      additionalProperties: false
+
+    DayPayload:
+      type: object
+      description: |
+        Day entry payload. Hidden-field preservation: when the caller omits a
+        field that the user has chosen to hide in their tracking preferences
+        (BBT, cervical mucus, sex activity, cycle factors, notes), the previous
+        value is preserved on update rather than overwritten with the default.
+      properties:
+        is_period:
+          type: boolean
+          default: false
+        flow:
+          type: string
+          enum: [none, spotting, light, medium, heavy]
+          default: none
+        mood:
+          type: integer
+          description: Mood scale value. Zero means unset.
+        sex_activity:
+          type: string
+          enum: [none, protected, unprotected]
+          default: none
+        bbt:
+          type: number
+          format: float
+          description: Basal body temperature in the unit selected per account (°C or °F). Zero means unset.
+        cervical_mucus:
+          type: string
+          enum: [none, dry, moist, creamy, eggwhite]
+          default: none
+        cycle_factor_keys:
+          type: array
+          items: { type: string }
+          description: Free-form factor identifiers recorded that day (`stress`, `travel`, `illness`, ...).
+        symptom_ids:
+          type: array
+          items:
+            type: integer
+            format: uint64
+            minimum: 1
+          description: References to symptom_types rows owned by the user.
+        notes:
+          type: string
+      additionalProperties: false
+
+    DailyLog:
+      type: object
+      description: |
+        A persisted day record. `date` is stored as UTC midnight on disk and
+        rendered in the caller's timezone at read time.
+      required: [id, user_id, date, is_period, flow, mood, sex_activity, bbt, cervical_mucus]
+      properties:
+        id:
+          type: integer
+          format: uint64
+        user_id:
+          type: integer
+          format: uint64
+        date:
+          type: string
+          format: date
+        is_period: { type: boolean }
+        cycle_start: { type: boolean }
+        is_uncertain: { type: boolean }
+        flow:
+          type: string
+          enum: [none, spotting, light, medium, heavy]
+        mood: { type: integer }
+        sex_activity:
+          type: string
+          enum: [none, protected, unprotected]
+        bbt:
+          type: number
+          format: float
+        cervical_mucus:
+          type: string
+          enum: [none, dry, moist, creamy, eggwhite]
+        cycle_factor_keys:
+          type: array
+          items: { type: string }
+        symptom_ids:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        notes: { type: string }
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DayExistsResponse:
+      type: object
+      required: [exists]
+      properties:
+        exists: { type: boolean }
+      additionalProperties: false
+
+    SymptomPayload:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: User-visible symptom label.
+        icon:
+          type: string
+          description: Single emoji or short symbol shown next to the name in the UI.
+        color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+          description: Hex color for the symptom chip background.
+      additionalProperties: false
+
+    Symptom:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: uint64
+        user_id:
+          type: integer
+          format: uint64
+        name: { type: string }
+        icon: { type: string }
+        color: { type: string }
+        is_builtin: { type: boolean }
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    StatsOverview:
+      type: object
+      description: |
+        Aggregate statistics for the current owner. The field set evolves
+        between releases — treat unknown fields as informational, do not error
+        on them.
+      additionalProperties: true
+
+    ExportJSONEntry:
+      type: object
+      description: One day in a JSON export. See [docs/export.md](export.md) for the per-field stability contract.
+      required:
+        - date
+        - period
+        - flow
+        - mood_rating
+        - sex_activity
+        - bbt
+        - cervical_mucus
+        - cycle_factors
+        - symptoms
+        - other_symptoms
+        - notes
+      properties:
+        date:
+          type: string
+          format: date
+        period: { type: boolean }
+        flow:
+          type: string
+          enum: [none, spotting, light, medium, heavy]
+        mood_rating: { type: integer }
+        sex_activity:
+          type: string
+          enum: [none, protected, unprotected]
+        bbt:
+          type: number
+          format: float
+        cervical_mucus:
+          type: string
+          enum: [none, dry, moist, creamy, eggwhite]
+        cycle_factors:
+          type: array
+          items: { type: string }
+        symptoms:
+          $ref: '#/components/schemas/ExportSymptomFlags'
+        other_symptoms:
+          type: array
+          items: { type: string }
+        notes: { type: string }
+
+    ExportSymptomFlags:
+      type: object
+      description: 15 fixed boolean flags for built-in symptoms. Always present with all keys, even when all values are false.
+      required:
+        - cramps
+        - headache
+        - acne
+        - mood
+        - bloating
+        - fatigue
+        - breast_tenderness
+        - back_pain
+        - nausea
+        - spotting
+        - irritability
+        - insomnia
+        - food_cravings
+        - diarrhea
+        - constipation
+      properties:
+        cramps: { type: boolean }
+        headache: { type: boolean }
+        acne: { type: boolean }
+        mood: { type: boolean }
+        bloating: { type: boolean }
+        fatigue: { type: boolean }
+        breast_tenderness: { type: boolean }
+        back_pain: { type: boolean }
+        nausea: { type: boolean }
+        spotting: { type: boolean }
+        irritability: { type: boolean }
+        insomnia: { type: boolean }
+        food_cravings: { type: boolean }
+        diarrhea: { type: boolean }
+        constipation: { type: boolean }
+      additionalProperties: false
+
+    ExportJSON:
+      type: object
+      required: [exported_at, entries]
+      properties:
+        exported_at:
+          type: string
+          format: date-time
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExportJSONEntry'
+      additionalProperties: false
+
+    ExportSummary:
+      type: object
+      required: [total_entries, has_data]
+      properties:
+        total_entries: { type: integer }
+        has_data: { type: boolean }
+        date_from:
+          type: string
+          format: date
+        date_to:
+          type: string
+          format: date
+
+    CycleSettings:
+      type: object
+      properties:
+        cycle_length:
+          type: integer
+          minimum: 1
+        period_length:
+          type: integer
+          minimum: 1
+        auto_period_fill: { type: boolean }
+        irregular_cycle: { type: boolean }
+        unpredictable_cycle: { type: boolean }
+        age_group:
+          type: string
+          enum: ["", under_20, age_20_35, age_35_plus]
+        usage_goal:
+          type: string
+          enum: [health, avoid_pregnancy, trying_to_conceive]
+        last_period_start:
+          type: string
+          format: date
+
+    ProfileSettings:
+      type: object
+      properties:
+        display_name:
+          type: string
+          maxLength: 80
+
+    InterfaceSettings:
+      type: object
+      properties:
+        language:
+          type: string
+          enum: [en, ru, es, fr, de]
+        theme:
+          type: string
+
+    TrackingSettings:
+      type: object
+      properties:
+        track_bbt: { type: boolean }
+        temperature_unit:
+          type: string
+          enum: [c, f]
+        track_cervical_mucus: { type: boolean }
+        hide_sex_chip: { type: boolean }
+        hide_cycle_factors: { type: boolean }
+        hide_notes_field: { type: boolean }
+        show_historical_phases: { type: boolean }
+
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password, confirm_password]
+      properties:
+        current_password:
+          type: string
+          format: password
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+        confirm_password:
+          type: string
+          format: password
+          minLength: 8
+      additionalProperties: false
+
+    StartLocalPasswordSetupRequest:
+      type: object
+      required: [new_password, confirm_password]
+      properties:
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+        confirm_password:
+          type: string
+          format: password
+          minLength: 8
+      additionalProperties: false
+
+    StartLocalPasswordSetupResponse:
+      type: object
+      required: [ok, redirect_url]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        redirect_url:
+          type: string
+          description: Provider authorize URL the browser must follow to begin re-auth.
+
+    PasswordOnlyRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          format: password
+
+    TOTPEnrollmentRequest:
+      allOf:
+        - $ref: '#/components/schemas/PasswordOnlyRequest'
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              pattern: "^[0-9]{6}$"
+              description: 6-digit code generated by the authenticator app against the secret displayed on the setup page.
+
+    OnboardingStep1Request:
+      type: object
+      description: First-step onboarding payload — owner specifies first day of latest period.
+      required: [last_period_start]
+      properties:
+        last_period_start:
+          type: string
+          format: date
+
+    OnboardingStep2Request:
+      type: object
+      required: [cycle_length, period_length]
+      properties:
+        cycle_length:
+          type: integer
+          minimum: 14
+          maximum: 60
+        period_length:
+          type: integer
+          minimum: 1
+          maximum: 14
+        auto_period_fill: { type: boolean }
+        irregular_cycle: { type: boolean }
+        age_group:
+          type: string
+          enum: ["", under_20, age_20_35, age_35_plus]
+        usage_goal:
+          type: string
+          enum: [health, avoid_pregnancy, trying_to_conceive]
+
+paths:
+  # =========================================================================
+  # meta
+  # =========================================================================
+  /healthz:
+    get:
+      tags: [meta]
+      summary: Liveness probe.
+      description: Returns 200 OK when the application is running. Public, no session required.
+      security: []
+      responses:
+        '200':
+          description: Service is alive.
+
+  /lang:
+    post:
+      tags: [meta]
+      summary: Set UI language preference.
+      description: Writes the `ovumcy_lang` cookie for the chosen language. Public, no session required.
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [language, csrf_token]
+              properties:
+                language:
+                  type: string
+                  enum: [en, ru, es, fr, de]
+                csrf_token: { type: string }
+      responses:
+        '200':
+          description: HTMX-style success.
+        '303':
+          description: Redirect to referer or `/`.
+
+  # =========================================================================
+  # auth
+  # =========================================================================
+  /api/auth/register:
+    post:
+      tags: [auth]
+      summary: Create a new owner account.
+      description: |
+        Returns the same response shape (a single sealed `ovumcy_register_pickup`
+        cookie of fixed length, redirect to `/register/welcome`) for new and
+        duplicate emails. See [SECURITY.md "Register enumeration"](../SECURITY.md#register-enumeration-pickup-cookie-follow-up-oracle-residual).
+        Per-IP rate limit: default 8 / 15 min.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '303':
+          description: Redirect to `/register/welcome` with the sealed pickup cookie. Shape is identical for new and duplicate emails.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Sign in with email and password.
+      description: |
+        Per-IP rate limit (default 8 / 15 min) plus per-account
+        `AuthAttemptPolicy` budget. Constant-time password verification with
+        equalized bcrypt timing on the missing-user branch.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: |
+            Either signed in (issues `ovumcy_auth`) or 2FA challenge required.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/OkResponse'
+                  - $ref: '#/components/schemas/LoginTOTPRequiredResponse'
+              examples:
+                signedIn:
+                  summary: Signed in
+                  value: { ok: true }
+                totpRequired:
+                  summary: 2FA challenge required
+                  value: { requires_totp: true }
+        '303':
+          description: "When `Accept: application/json` is not set, redirect to `/dashboard`, `/auth/2fa`, or `/reset-password`."
+        '401':
+          description: Invalid credentials.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+              example: { error: "auth.invalid_credentials" }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/2fa:
+    post:
+      tags: [auth]
+      summary: Submit the TOTP code in the 2FA challenge.
+      description: |
+        Requires the `ovumcy_totp_pending` cookie issued by a successful
+        password login. Per-account TOTP rate limit: 5 attempts / 15 min.
+        Replayed codes within the 30-second step are rejected with the same
+        response shape as an invalid code.
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TOTPLoginRequest' }
+      responses:
+        '200':
+          description: 2FA verified; `ovumcy_auth` issued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '303':
+          description: Browser redirect to `/`.
+        '401':
+          description: Invalid code or pending session expired.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke current session.
+      description: |
+        Bumps `auth_session_version` (invalidating every other auth cookie for
+        the account), clears auth-related cookies, and may return an OIDC
+        end-session bridge URL if the session was OIDC-backed.
+        Per-account rate limit: 60 / 15 min.
+      responses:
+        '200':
+          description: Logged out.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/OkResponse'
+                  - $ref: '#/components/schemas/OkRedirectResponse'
+        '303':
+          description: Browser redirect to `/login` or the OIDC logout bridge path.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/forgot-password:
+    post:
+      tags: [auth]
+      summary: Begin password reset via recovery code.
+      description: |
+        Validates the `(email, recovery_code)` pair without leaking which one
+        was wrong. Per-IP rate limit: default 8 / 1 hour.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForgotPasswordRequest' }
+      responses:
+        '303':
+          description: Redirect to `/reset-password` with a sealed reset cookie.
+        '401':
+          description: Recovery code does not match the supplied email.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/reset-password:
+    post:
+      tags: [auth]
+      summary: Set a new password using the reset cookie.
+      description: |
+        Requires the `ovumcy_reset_password` cookie issued by `POST
+        /api/auth/forgot-password`. Bumps `auth_session_version` on success.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+      responses:
+        '303':
+          description: Redirect to `/login` after success.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # =========================================================================
+  # onboarding (outside /api/* — historical)
+  # =========================================================================
+  /onboarding/step1:
+    post:
+      tags: [onboarding]
+      summary: Onboarding step 1 — first day of latest period.
+      description: |
+        **Lives outside `/api/*`** for historical reasons; logically part of
+        the API and a candidate for relocation in a future v1 cleanup.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OnboardingStep1Request' }
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /onboarding/step2:
+    post:
+      tags: [onboarding]
+      summary: Onboarding step 2 — cycle preferences.
+      description: Lives outside `/api/*`; logically part of the API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OnboardingStep2Request' }
+      responses:
+        '200':
+          description: Saved; onboarding is finalized inside the handler.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /onboarding/complete:
+    post:
+      tags: [onboarding]
+      summary: Mark onboarding as complete.
+      description: Lives outside `/api/*`; logically part of the API.
+      responses:
+        '200':
+          description: Completed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # =========================================================================
+  # days
+  # =========================================================================
+  /api/days:
+    get:
+      tags: [days]
+      summary: List daily log entries in a date range.
+      parameters:
+        - $ref: '#/components/parameters/FromQuery'
+        - $ref: '#/components/parameters/ToQuery'
+      responses:
+        '200':
+          description: Array of day entries. Empty array when no rows match the range.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DailyLog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/days/{date}:
+    parameters:
+      - $ref: '#/components/parameters/DateParam'
+    get:
+      tags: [days]
+      summary: Read a single day's entry.
+      responses:
+        '200':
+          description: The day record.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyLog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [days]
+      summary: Upsert a day's entry (owner only).
+      description: |
+        Creates a new row when missing or updates the existing row. Hidden-field
+        preservation rules apply for tracking preferences (BBT, mucus, sex
+        activity, cycle factors, notes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DayPayload' }
+      responses:
+        '200':
+          description: Persisted entry.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyLog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [days]
+      summary: Delete a single day's entry (owner only).
+      responses:
+        '204':
+          description: Deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/days/{date}/exists:
+    get:
+      tags: [days]
+      summary: Check whether the day has any persisted data (owner only).
+      parameters:
+        - $ref: '#/components/parameters/DateParam'
+      responses:
+        '200':
+          description: Existence check result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DayExistsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/days/{date}/cycle-start:
+    post:
+      tags: [days]
+      summary: Mark the day as the start of a new cycle (owner only).
+      description: |
+        Action on a day resource. Optional form flags control merge behavior
+        with any pre-existing data on the day.
+      parameters:
+        - $ref: '#/components/parameters/DateParam'
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                replace_existing: { type: string, enum: ["true", "false"] }
+                mark_uncertain: { type: string, enum: ["true", "false"] }
+                ack_period_tip: { type: string, enum: ["true", "false"] }
+      responses:
+        '200':
+          description: Cycle start marked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # =========================================================================
+  # dailyLog
+  # =========================================================================
+  /api/log/delete:
+    delete:
+      tags: [dailyLog]
+      summary: Delete the user's entire daily log (owner only).
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # =========================================================================
+  # symptoms
+  # =========================================================================
+  /api/symptoms:
+    get:
+      tags: [symptoms]
+      summary: List symptoms for the current user.
+      responses:
+        '200':
+          description: Symptoms array.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Symptom' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [symptoms]
+      summary: Create a custom symptom (owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SymptomPayload' }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Symptom' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/symptoms/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SymptomId'
+    post:
+      tags: [symptoms]
+      summary: Update a symptom (owner only).
+      description: |
+        Currently `POST` for HTMX form compatibility. Canonical REST would be
+        `PATCH`; a future v1 cleanup may move this.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SymptomPayload' }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Symptom' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [symptoms]
+      summary: Archive (soft-delete) a symptom (owner only).
+      description: |
+        Alias for `POST /api/symptoms/{id}/archive` — both routes invoke the
+        same handler. A future v1 cleanup will retire one of them.
+      responses:
+        '200':
+          description: Archived.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/symptoms/{id}/archive:
+    post:
+      tags: [symptoms]
+      summary: Archive a symptom (owner only).
+      description: Alias for `DELETE /api/symptoms/{id}`; both routes invoke the same handler.
+      parameters:
+        - $ref: '#/components/parameters/SymptomId'
+      responses:
+        '200':
+          description: Archived.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/symptoms/{id}/restore:
+    post:
+      tags: [symptoms]
+      summary: Restore a previously archived symptom (owner only).
+      parameters:
+        - $ref: '#/components/parameters/SymptomId'
+      responses:
+        '200':
+          description: Restored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # =========================================================================
+  # stats
+  # =========================================================================
+  /api/stats/overview:
+    get:
+      tags: [stats]
+      summary: Current cycle statistics for the signed-in user.
+      responses:
+        '200':
+          description: Overview payload.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatsOverview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # =========================================================================
+  # export
+  # =========================================================================
+  /api/export/summary:
+    post:
+      tags: [export]
+      summary: Summary metadata for the export UI (owner only).
+      parameters:
+        - $ref: '#/components/parameters/FromQuery'
+        - $ref: '#/components/parameters/ToQuery'
+      responses:
+        '200':
+          description: Summary payload.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/export/csv:
+    post:
+      tags: [export]
+      summary: Download full data as CSV (owner only).
+      parameters:
+        - $ref: '#/components/parameters/FromQuery'
+        - $ref: '#/components/parameters/ToQuery'
+      responses:
+        '200':
+          description: CSV download.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              example: 'attachment; filename="ovumcy-export-2026-05-17.csv"'
+          content:
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/export/json:
+    post:
+      tags: [export]
+      summary: Download full data as JSON (owner only).
+      parameters:
+        - $ref: '#/components/parameters/FromQuery'
+        - $ref: '#/components/parameters/ToQuery'
+      responses:
+        '200':
+          description: JSON download.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              example: 'attachment; filename="ovumcy-export-2026-05-17.json"'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportJSON' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # =========================================================================
+  # settings
+  # =========================================================================
+  /api/settings/profile:
+    post:
+      tags: [settings]
+      summary: Update display name (owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileSettings' }
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/settings/interface:
+    post:
+      tags: [settings]
+      summary: Update interface preferences (owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InterfaceSettings' }
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/settings/tracking:
+    post:
+      tags: [settings]
+      summary: Update tracking preferences (owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TrackingSettings' }
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/settings/change-password:
+    post:
+      tags: [settings]
+      summary: Change password (owner only, local-auth accounts).
+      description: |
+        For accounts with `local_auth_enabled=false` (OIDC-only), this endpoint
+        returns `403 oidc reauth required` — those accounts must use the
+        step-up flow at `POST /api/settings/start-local-password-setup`.
+        Bumps `auth_session_version` on success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '200':
+          description: Password changed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: OIDC re-auth required for OIDC-only accounts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+              example: { error: "oidc reauth required" }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/settings/start-local-password-setup:
+    post:
+      tags: [settings]
+      summary: Begin the OIDC step-up flow to enable a local password (owner only, OIDC-only).
+      description: |
+        Validates the new password pair, stashes its bcrypt hash in a sealed
+        cookie, and returns the provider's authorize URL. The browser follows
+        the redirect; the provider re-authenticates the user; the callback at
+        `/auth/oidc/callback` finalizes the local password and mints a
+        recovery code. See [docs/oidc.md "How Auto-Provision Works"](oidc.md#how-auto-provision-works).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartLocalPasswordSetupRequest' }
+      responses:
+        '200':
+          description: OIDC redirect URL emitted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StartLocalPasswordSetupResponse' }
+        '303':
+          description: "Browser redirect to the provider authorize URL when `Accept: application/json` is not set."
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/settings/regenerate-recovery-code:
+    post:
+      tags: [settings]
+      summary: Issue a fresh recovery code (owner only).
+      description: |
+        Requires the current password (or OIDC-only accounts must first enrol a
+        local password via the step-up flow). Bumps `auth_session_version`;
+        other devices are signed out, the originating device is refreshed
+        inline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordOnlyRequest' }
+      responses:
+        '200':
+          description: Recovery code surface rendered. JSON clients should follow the redirect to `/recovery-code` to pick up the plaintext code (shown exactly once).
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/settings/2fa/verify:
+    post:
+      tags: [settings]
+      summary: Enable TOTP 2FA (owner only).
+      description: |
+        Requires the user's current password plus the 6-digit code generated
+        against the secret stashed by the `GET /settings/2fa` setup page in
+        the `ovumcy_totp_setup` cookie. Bumps `auth_session_version`.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/TOTPEnrollmentRequest' }
+      responses:
+        '200':
+          description: 2FA enabled.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/settings/2fa/disable:
+    post:
+      tags: [settings]
+      summary: Disable TOTP 2FA (owner only).
+      description: |
+        Requires the current password. Per-account rate limit: 5 attempts /
+        15 min. Bumps `auth_session_version`.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/PasswordOnlyRequest' }
+      responses:
+        '200':
+          description: 2FA disabled.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/settings/clear-data/validate:
+    post:
+      tags: [settings]
+      summary: Validate current password before showing the clear-data confirmation (owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordOnlyRequest' }
+      responses:
+        '200':
+          description: Password OK, the client may proceed to the actual wipe endpoint.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '204':
+          description: Same as 200 for non-JSON clients.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/settings/clear-data:
+    post:
+      tags: [settings]
+      summary: Wipe per-account health data and reset preferences (owner only).
+      description: |
+        Deletes daily_logs, deletes user-defined symptoms (built-in symptoms
+        remain), resets cycle and tracking preferences to documented defaults,
+        and atomically bumps `auth_session_version` so other sessions are
+        revoked. The originating device is refreshed inline.
+        See [SECURITY.md "Retention and Deletion"](../SECURITY.md#retention-and-deletion).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordOnlyRequest' }
+      responses:
+        '200':
+          description: Data wiped.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/settings/delete-account:
+    delete:
+      tags: [settings]
+      summary: Delete the current account and all related data (owner only).
+      description: |
+        Requires the current password. Deletes daily_logs, all symptoms for the
+        user (including built-ins), the users row, and cascade-deletes
+        `oidc_identities`. See [SECURITY.md "Retention and Deletion"](../SECURITY.md#retention-and-deletion).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordOnlyRequest' }
+      responses:
+        '200':
+          description: Account deleted. Auth cookies cleared.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  # =========================================================================
+  # settings-cycle (outside /api/* — historical)
+  # =========================================================================
+  /settings/cycle:
+    post:
+      tags: [settings-cycle]
+      summary: Update cycle settings (owner only).
+      description: |
+        **Lives outside `/api/*`** for historical reasons; logically part of
+        the API and a candidate for relocation in a future v1 cleanup.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CycleSettings' }
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
