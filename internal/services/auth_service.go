@@ -124,6 +124,11 @@ func (service *AuthService) RegisterOwner(email string, rawPassword string, conf
 		return models.User{}, "", ErrAuthRegisterFailed
 	}
 	if exists {
+		// Spend the same bcrypt time as the new-account branch so a duplicate-email probe
+		// cannot be distinguished from a fresh email by POST /api/auth/register response
+		// latency. BuildOwnerUserWithRecovery runs two bcrypt operations (password hash +
+		// recovery code hash), so equalize against both placeholders.
+		equalizeRegistrationTiming(rawPassword)
 		return models.User{}, "", ErrAuthEmailExists
 	}
 
@@ -379,6 +384,17 @@ func equalizeRecoveryCodeLookupTiming(code string) {
 // flake-prone on shared CI runners). Production code never reassigns this.
 var equalizeAuthCredentialsTiming = func(password string) {
 	_ = bcrypt.CompareHashAndPassword([]byte(credentialsTimingEqualizationHash), []byte(password))
+}
+
+// equalizeRegistrationTiming mirrors the bcrypt work BuildOwnerUserWithRecovery
+// performs on a fresh registration (password hash + recovery-code hash) so the
+// duplicate-email branch of RegisterOwner spends comparable time and an attacker
+// cannot tell a new email from an existing one through POST /api/auth/register
+// response latency. Declared as a var for the same test-substitution reason as
+// equalizeAuthCredentialsTiming.
+var equalizeRegistrationTiming = func(password string) {
+	_ = bcrypt.CompareHashAndPassword([]byte(credentialsTimingEqualizationHash), []byte(password))
+	_ = bcrypt.CompareHashAndPassword([]byte(recoveryCodeTimingEqualizationHash), []byte(password))
 }
 
 func (service *AuthService) ResetPasswordAndRotateRecoveryCode(user *models.User, newPassword string) (string, error) {
