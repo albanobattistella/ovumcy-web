@@ -246,3 +246,179 @@ func TestUpsertDayAutoFillSkipsWhenRecentPeriodDayExists(t *testing.T) {
 		t.Fatalf("expected recent-period guard to prevent a new auto-fill sequence")
 	}
 }
+
+func TestUpsertDayAutoFillClearsBareNeighborsWhenAnchorToggledOff(t *testing.T) {
+	t.Parallel()
+
+	app, database := newOnboardingTestApp(t)
+	user := createOnboardingTestUser(t, database, "upsert-day-autofill-clear@example.com", "StrongPass1", true)
+	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
+
+	if err := database.Model(&models.User{}).Where("id = ?", user.ID).Updates(map[string]any{
+		"period_length":    4,
+		"auto_period_fill": true,
+	}).Error; err != nil {
+		t.Fatalf("update user cycle settings: %v", err)
+	}
+
+	onPayload := map[string]any{
+		"is_period":   true,
+		"flow":        models.FlowMedium,
+		"symptom_ids": []uint{},
+		"notes":       "",
+	}
+	onBody, err := json.Marshal(onPayload)
+	if err != nil {
+		t.Fatalf("marshal on payload: %v", err)
+	}
+	onRequest := httptest.NewRequest(http.MethodPut, "/api/v1/days/2026-02-10", bytes.NewReader(onBody))
+	onRequest.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	onRequest.Header.Set("Cookie", authCookie)
+	onResponse, err := app.Test(onRequest, -1)
+	if err != nil {
+		t.Fatalf("on request failed: %v", err)
+	}
+	defer onResponse.Body.Close()
+	if onResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 on toggle on, got %d", onResponse.StatusCode)
+	}
+
+	autoFilledDays := []string{"2026-02-11", "2026-02-12", "2026-02-13"}
+	for _, dateRaw := range autoFilledDays {
+		day, err := services.ParseDayDate(dateRaw, time.UTC)
+		if err != nil {
+			t.Fatalf("parse day %s: %v", dateRaw, err)
+		}
+		entry, err := fetchLogByDateForTest(database, user.ID, day, time.UTC)
+		if err != nil {
+			t.Fatalf("fetch log for %s: %v", dateRaw, err)
+		}
+		if !entry.IsPeriod {
+			t.Fatalf("expected %s to be auto-marked as period day before toggle off", dateRaw)
+		}
+	}
+
+	offPayload := map[string]any{
+		"is_period":   false,
+		"flow":        models.FlowNone,
+		"symptom_ids": []uint{},
+		"notes":       "",
+	}
+	offBody, err := json.Marshal(offPayload)
+	if err != nil {
+		t.Fatalf("marshal off payload: %v", err)
+	}
+	offRequest := httptest.NewRequest(http.MethodPut, "/api/v1/days/2026-02-10", bytes.NewReader(offBody))
+	offRequest.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	offRequest.Header.Set("Cookie", authCookie)
+	offResponse, err := app.Test(offRequest, -1)
+	if err != nil {
+		t.Fatalf("off request failed: %v", err)
+	}
+	defer offResponse.Body.Close()
+	if offResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 on toggle off, got %d", offResponse.StatusCode)
+	}
+
+	allDays := []string{"2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13"}
+	for _, dateRaw := range allDays {
+		day, err := services.ParseDayDate(dateRaw, time.UTC)
+		if err != nil {
+			t.Fatalf("parse day %s: %v", dateRaw, err)
+		}
+		entry, err := fetchLogByDateForTest(database, user.ID, day, time.UTC)
+		if err != nil {
+			t.Fatalf("fetch log for %s: %v", dateRaw, err)
+		}
+		if entry.IsPeriod {
+			t.Fatalf("expected %s to be cleared after anchor toggle off, got IsPeriod=true", dateRaw)
+		}
+	}
+}
+
+func TestUpsertDayAutoFillPreservesManualNeighborsWhenAnchorToggledOff(t *testing.T) {
+	t.Parallel()
+
+	app, database := newOnboardingTestApp(t)
+	user := createOnboardingTestUser(t, database, "upsert-day-autofill-preserve@example.com", "StrongPass1", true)
+	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
+
+	if err := database.Model(&models.User{}).Where("id = ?", user.ID).Updates(map[string]any{
+		"period_length":    5,
+		"auto_period_fill": true,
+	}).Error; err != nil {
+		t.Fatalf("update user cycle settings: %v", err)
+	}
+
+	onPayload := map[string]any{
+		"is_period":   true,
+		"flow":        models.FlowMedium,
+		"symptom_ids": []uint{},
+		"notes":       "",
+	}
+	onBody, _ := json.Marshal(onPayload)
+	onRequest := httptest.NewRequest(http.MethodPut, "/api/v1/days/2026-02-10", bytes.NewReader(onBody))
+	onRequest.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	onRequest.Header.Set("Cookie", authCookie)
+	onResponse, _ := app.Test(onRequest, -1)
+	defer onResponse.Body.Close()
+
+	manualDay, _ := services.ParseDayDate("2026-02-12", time.UTC)
+	manualEntry, err := fetchLogByDateForTest(database, user.ID, manualDay, time.UTC)
+	if err != nil {
+		t.Fatalf("fetch manual day: %v", err)
+	}
+	manualEntry.Notes = "cramps reminder"
+	if err := database.Save(&manualEntry).Error; err != nil {
+		t.Fatalf("save manual annotation: %v", err)
+	}
+
+	offPayload := map[string]any{
+		"is_period":   false,
+		"flow":        models.FlowNone,
+		"symptom_ids": []uint{},
+		"notes":       "",
+	}
+	offBody, _ := json.Marshal(offPayload)
+	offRequest := httptest.NewRequest(http.MethodPut, "/api/v1/days/2026-02-10", bytes.NewReader(offBody))
+	offRequest.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	offRequest.Header.Set("Cookie", authCookie)
+	offResponse, err := app.Test(offRequest, -1)
+	if err != nil {
+		t.Fatalf("off request failed: %v", err)
+	}
+	defer offResponse.Body.Close()
+	if offResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 on toggle off, got %d", offResponse.StatusCode)
+	}
+
+	day11, _ := services.ParseDayDate("2026-02-11", time.UTC)
+	day11Entry, err := fetchLogByDateForTest(database, user.ID, day11, time.UTC)
+	if err != nil {
+		t.Fatalf("fetch day 11: %v", err)
+	}
+	if day11Entry.IsPeriod {
+		t.Fatalf("expected day 11 to be cleared, got IsPeriod=true")
+	}
+
+	day12, _ := services.ParseDayDate("2026-02-12", time.UTC)
+	day12Entry, err := fetchLogByDateForTest(database, user.ID, day12, time.UTC)
+	if err != nil {
+		t.Fatalf("fetch day 12: %v", err)
+	}
+	if !day12Entry.IsPeriod {
+		t.Fatalf("expected day 12 with manual notes to be preserved as period")
+	}
+	if day12Entry.Notes != "cramps reminder" {
+		t.Fatalf("expected manual notes to be preserved on day 12, got %q", day12Entry.Notes)
+	}
+
+	day13, _ := services.ParseDayDate("2026-02-13", time.UTC)
+	day13Entry, err := fetchLogByDateForTest(database, user.ID, day13, time.UTC)
+	if err != nil {
+		t.Fatalf("fetch day 13: %v", err)
+	}
+	if !day13Entry.IsPeriod {
+		t.Fatalf("expected clearing to stop at the first manual day; day 13 should remain period")
+	}
+}

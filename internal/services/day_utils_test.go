@@ -54,6 +54,83 @@ func TestDayHasData(t *testing.T) {
 	}
 }
 
+func TestIsAutoFilledPeriodCandidate(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry models.DailyLog
+		want  bool
+	}{
+		{
+			name:  "bare period day",
+			entry: models.DailyLog{IsPeriod: true},
+			want:  true,
+		},
+		{
+			name:  "bare period day with propagated flow",
+			entry: models.DailyLog{IsPeriod: true, Flow: models.FlowLight},
+			want:  true,
+		},
+		{
+			name:  "non-period day",
+			entry: models.DailyLog{IsPeriod: false},
+			want:  false,
+		},
+		{
+			name:  "anchor day with cycle start",
+			entry: models.DailyLog{IsPeriod: true, CycleStart: true},
+			want:  false,
+		},
+		{
+			name:  "uncertain anchor",
+			entry: models.DailyLog{IsPeriod: true, IsUncertain: true},
+			want:  false,
+		},
+		{
+			name:  "period day with symptoms",
+			entry: models.DailyLog{IsPeriod: true, SymptomIDs: []uint{1}},
+			want:  false,
+		},
+		{
+			name:  "period day with notes",
+			entry: models.DailyLog{IsPeriod: true, Notes: "spotty"},
+			want:  false,
+		},
+		{
+			name:  "period day with cycle factors",
+			entry: models.DailyLog{IsPeriod: true, CycleFactorKeys: []string{models.CycleFactorStress}},
+			want:  false,
+		},
+		{
+			name:  "period day with intimacy logged",
+			entry: models.DailyLog{IsPeriod: true, SexActivity: models.SexActivityProtected},
+			want:  false,
+		},
+		{
+			name:  "period day with mood",
+			entry: models.DailyLog{IsPeriod: true, Mood: MinDayMood},
+			want:  false,
+		},
+		{
+			name:  "period day with bbt reading",
+			entry: models.DailyLog{IsPeriod: true, BBT: 36.5},
+			want:  false,
+		},
+		{
+			name:  "period day with cervical mucus",
+			entry: models.DailyLog{IsPeriod: true, CervicalMucus: models.CervicalMucusEggWhite},
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsAutoFilledPeriodCandidate(tt.entry); got != tt.want {
+				t.Fatalf("IsAutoFilledPeriodCandidate() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDayRangeReturnsUTCBoundsForLocalCalendarDay(t *testing.T) {
 	moscow, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {

@@ -118,6 +118,42 @@ func DayHasData(entry models.DailyLog) bool {
 	return strings.TrimSpace(entry.Flow) != "" && entry.Flow != models.FlowNone
 }
 
+// IsAutoFilledPeriodCandidate reports whether a day log carries no manual
+// signal besides the IsPeriod flag (and the Flow value that
+// AutoFillFollowingPeriodDays propagates from the anchor), so toggling the
+// anchor day off can safely clear it. Days touched manually (mood, intimacy,
+// BBT, mucus, cycle factors, symptoms, notes), days marked as a cycle anchor,
+// and uncertain anchors are kept intact. The Flow field is excluded from the
+// check because web's auto-fill replays the anchor's flow into the neighbors;
+// a neighbor whose only manual change was a flow override therefore falls
+// inside the auto-fill window for clearing purposes. This is the parity
+// counterpart of `isAutoFilledPeriodCandidate` in ovumcy-app, where auto-fill
+// does not propagate flow.
+func IsAutoFilledPeriodCandidate(entry models.DailyLog) bool {
+	if !entry.IsPeriod || entry.CycleStart || entry.IsUncertain {
+		return false
+	}
+	if entry.Mood >= MinDayMood && entry.Mood <= MaxDayMood {
+		return false
+	}
+	if NormalizeDaySexActivity(entry.SexActivity) != models.SexActivityNone {
+		return false
+	}
+	if IsValidDayBBT(entry.BBT) && entry.BBT > 0 {
+		return false
+	}
+	if NormalizeDayCervicalMucus(entry.CervicalMucus) != models.CervicalMucusNone {
+		return false
+	}
+	if len(DayCycleFactorKeySet(entry.CycleFactorKeys)) > 0 {
+		return false
+	}
+	if len(entry.SymptomIDs) > 0 {
+		return false
+	}
+	return strings.TrimSpace(entry.Notes) == ""
+}
+
 func RemoveUint(values []uint, needle uint) []uint {
 	filtered := make([]uint, 0, len(values))
 	for _, value := range values {

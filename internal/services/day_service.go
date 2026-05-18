@@ -224,16 +224,16 @@ func (service *DayService) UpsertDayEntryWithAutoFillAt(userID uint, day time.Ti
 	autoPeriodFillEnabled := false
 	periodLength := models.DefaultPeriodLength
 
-	if normalized.IsPeriod {
+	entry, wasPeriod, err := service.UpsertDayEntry(userID, dayStart, normalized, location)
+	if err != nil {
+		return models.DailyLog{}, err
+	}
+
+	if normalized.IsPeriod || wasPeriod {
 		periodLength, autoPeriodFillEnabled, err = service.LoadAutoFillSettings(userID)
 		if err != nil {
 			return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillLoadFailed, err)
 		}
-	}
-
-	entry, wasPeriod, err := service.UpsertDayEntry(userID, dayStart, normalized, location)
-	if err != nil {
-		return models.DailyLog{}, err
 	}
 
 	if normalized.IsPeriod {
@@ -246,11 +246,67 @@ func (service *DayService) UpsertDayEntryWithAutoFillAt(userID uint, day time.Ti
 				return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillApplyFailed, err)
 			}
 		}
+	} else if wasPeriod && autoPeriodFillEnabled {
+		shouldClear, err := service.shouldClearAutoFilledNeighbors(userID, dayStart, location)
+		if err != nil {
+			return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillCheckFailed, err)
+		}
+		if shouldClear {
+			if err := service.ClearAutoFilledPeriodNeighbors(userID, dayStart, periodLength, location); err != nil {
+				return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillApplyFailed, err)
+			}
+		}
 	}
 
 	service.refreshDerivedCycleSettings(userID, location)
 
 	return entry, nil
+}
+
+func (service *DayService) shouldClearAutoFilledNeighbors(userID uint, dayStart time.Time, location *time.Location) (bool, error) {
+	previousDay := dayStart.AddDate(0, 0, -1)
+	previousEntry, err := service.FetchLogByDate(userID, previousDay, location)
+	if err != nil {
+		return false, err
+	}
+	return !previousEntry.IsPeriod, nil
+}
+
+// ClearAutoFilledPeriodNeighbors walks the periodLength-1 days following
+// startDay and clears IsPeriod (plus the propagated Flow) on every contiguous
+// auto-fill candidate. It stops at the first day that carries any manual
+// signal so user edits are preserved. Mirrors the ovumcy-app
+// `collectAutoFilledPeriodDaysToClear` heuristic.
+func (service *DayService) ClearAutoFilledPeriodNeighbors(userID uint, startDay time.Time, periodLength int, location *time.Location) error {
+	if periodLength <= 1 {
+		return nil
+	}
+	if location == nil {
+		location = time.UTC
+	}
+
+	for offset := 1; offset < periodLength; offset++ {
+		targetDay := CalendarDay(startDay.AddDate(0, 0, offset), location)
+		dayRangeStart, dayRangeEnd := DayRange(targetDay, location)
+		entry, found, err := service.logs.FindByUserAndDayRange(userID, dayRangeStart, dayRangeEnd)
+		if err != nil {
+			return err
+		}
+		if !found {
+			break
+		}
+		if !IsAutoFilledPeriodCandidate(entry) {
+			break
+		}
+
+		entry.IsPeriod = false
+		entry.Flow = models.FlowNone
+		if err := service.logs.Save(&entry); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (service *DayService) DeleteDayEntry(userID uint, day time.Time, location *time.Location) error {
