@@ -19,7 +19,7 @@ func TestOnboardingStep2SanitizesOutOfRangeAndIncompatibleValues(t *testing.T) {
 		"cycle_length":  {"14"},
 		"period_length": {"5"},
 	}
-	invalidCycleRequest := httptest.NewRequest(http.MethodPost, "/onboarding/step2", strings.NewReader(invalidCycleForm.Encode()))
+	invalidCycleRequest := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/2", strings.NewReader(invalidCycleForm.Encode()))
 	invalidCycleRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invalidCycleRequest.Header.Set("HX-Request", "true")
 	invalidCycleRequest.Header.Set("Cookie", authCookie)
@@ -48,7 +48,7 @@ func TestOnboardingStep2SanitizesOutOfRangeAndIncompatibleValues(t *testing.T) {
 		"cycle_length":  {"21"},
 		"period_length": {"14"},
 	}
-	incompatibleRequest := httptest.NewRequest(http.MethodPost, "/onboarding/step2", strings.NewReader(incompatibleForm.Encode()))
+	incompatibleRequest := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/2", strings.NewReader(incompatibleForm.Encode()))
 	incompatibleRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	incompatibleRequest.Header.Set("HX-Request", "true")
 	incompatibleRequest.Header.Set("Cookie", authCookie)
@@ -84,7 +84,7 @@ func TestOnboardingStep2IgnoresUnexpectedPeriodEndInput(t *testing.T) {
 		"last_period_start": {"2026-02-10"},
 		"period_end":        {"2026-02-15"},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step2", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/2", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", authCookie)
@@ -147,7 +147,7 @@ func TestOnboardingStep2SanitizesSliderValuesEvenWhenUnexpectedPeriodEndIsPresen
 				"last_period_start": {"2026-02-10"},
 				"period_end":        {"2026-02-25"},
 			}
-			request := httptest.NewRequest(http.MethodPost, "/onboarding/step2", strings.NewReader(form.Encode()))
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/2", strings.NewReader(form.Encode()))
 			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			request.Header.Set("HX-Request", "true")
 			request.Header.Set("Cookie", authCookie)

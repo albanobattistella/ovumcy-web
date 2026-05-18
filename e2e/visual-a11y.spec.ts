@@ -39,7 +39,7 @@ async function setCurrentCycleStart(page: Page, isoDate: string): Promise<void> 
   await page.goto('/settings');
   await expect(page).toHaveURL(/\/settings$/);
 
-  const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+  const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
   await expect(cycleForm).toBeVisible();
   await fillDateField(cycleForm.locator('#settings-last-period-start'), isoDate);
   await cycleForm.locator('button[data-save-button]').click();

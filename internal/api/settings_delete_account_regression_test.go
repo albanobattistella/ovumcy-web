@@ -14,7 +14,7 @@ import (
 func TestSettingsDeleteAccountRejectsMissingPassword(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-delete-missing@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/settings/delete-account", url.Values{}, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/v1/users/current", url.Values{}, map[string]string{
 		"Accept": "application/json",
 	})
 	defer response.Body.Close()
@@ -38,7 +38,7 @@ func TestSettingsDeleteAccountRejectsMissingPassword(t *testing.T) {
 func TestSettingsDeleteAccountRejectsInvalidPassword(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-delete-invalid@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/settings/delete-account", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/v1/users/current", url.Values{
 		"password": {"WrongPass1"},
 	}, map[string]string{
 		"Accept": "application/json",
@@ -69,7 +69,7 @@ func TestSettingsDeleteAccountDeletesUserAndClearsAuthRelatedCookies(t *testing.
 		"password":   {"StrongPass1"},
 		"csrf_token": {ctx.csrfToken},
 	}
-	request := httptest.NewRequest(http.MethodDelete, "/api/settings/delete-account", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/users/current", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set(

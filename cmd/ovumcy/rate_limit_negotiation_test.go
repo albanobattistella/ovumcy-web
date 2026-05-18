@@ -196,9 +196,9 @@ func TestSettingsAPIRateLimitHandlerRedirectsToSettings(t *testing.T) {
 	handler := newRateLimitTestHandler(t)
 	app := fiber.New()
 	app.Use(handler.LanguageMiddleware)
-	app.Post("/api/settings/profile", newAPIRateLimitHandler(handler))
+	app.Patch("/api/v1/users/current/profile", newAPIRateLimitHandler(handler))
 
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader("display_name=Owner"))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader("display_name=Owner"))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	response, err := app.Test(request, -1)
@@ -219,9 +219,9 @@ func TestAPIRateLimitHandlerReturnsStatusErrorMarkupForHTMX(t *testing.T) {
 	handler := newRateLimitTestHandler(t)
 	app := fiber.New()
 	app.Use(handler.LanguageMiddleware)
-	app.Post("/api/stats/overview", newAPIRateLimitHandler(handler))
+	app.Post("/api/v1/stats/overview", newAPIRateLimitHandler(handler))
 
-	request := httptest.NewRequest(http.MethodPost, "/api/stats/overview", nil)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/stats/overview", nil)
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Accept-Language", "en")
 

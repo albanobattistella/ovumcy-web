@@ -49,21 +49,21 @@ func TestOIDCOnlySettingsSensitiveActionsRequireLocalPassword(t *testing.T) {
 		{
 			name:      "recovery regeneration",
 			method:    http.MethodPost,
-			path:      "/api/settings/regenerate-recovery-code",
+			path:      "/api/v1/users/current/recovery-code",
 			form:      url.Values{},
 			wantError: "local password required",
 		},
 		{
 			name:      "clear-data validation",
 			method:    http.MethodPost,
-			path:      "/api/settings/clear-data/validate",
+			path:      "/api/v1/users/current/data-wipe/validate",
 			form:      url.Values{"password": {"unused"}},
 			wantError: "local password required",
 		},
 		{
 			name:      "delete account",
 			method:    http.MethodDelete,
-			path:      "/api/settings/delete-account",
+			path:      "/api/v1/users/current",
 			form:      url.Values{"password": {"unused"}},
 			wantError: "local password required",
 		},
@@ -86,7 +86,7 @@ func TestOIDCOnlySettingsSensitiveActionsRequireLocalPassword(t *testing.T) {
 }
 
 // TestOIDCOnlySettingsChangePasswordRequiresReauth is the closed-CVE regression
-// for #3: prior to the OIDC step-up flow, POST /api/settings/change-password
+// for #3: prior to the OIDC step-up flow, POST /api/v1/users/current/password
 // for an OIDC-only account silently enabled a local password and emitted a
 // fresh recovery code. A hijacked session could thus mint a permanent
 // take-over in a single request. The endpoint must now reject this branch
@@ -100,7 +100,7 @@ func TestOIDCOnlySettingsChangePasswordRequiresReauth(t *testing.T) {
 		"new_password":     {"EvenStronger2"},
 		"confirm_password": {"EvenStronger2"},
 	}
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", form, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", form, map[string]string{
 		"Accept": "application/json",
 	})
 	defer response.Body.Close()

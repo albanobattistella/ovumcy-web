@@ -14,7 +14,7 @@ func TestRegenerateRecoveryCodeRejectsMissingPassword(t *testing.T) {
 
 	priorHash := loadUserRecoveryCodeHash(t, ctx)
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/regenerate-recovery-code", url.Values{}, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/recovery-code", url.Values{}, map[string]string{
 		"Accept": "application/json",
 	})
 	defer response.Body.Close()
@@ -31,7 +31,7 @@ func TestRegenerateRecoveryCodeRejectsWrongPassword(t *testing.T) {
 
 	priorHash := loadUserRecoveryCodeHash(t, ctx)
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/regenerate-recovery-code", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/recovery-code", url.Values{
 		"password": {"WrongPass1"},
 	}, map[string]string{
 		"Accept": "application/json",

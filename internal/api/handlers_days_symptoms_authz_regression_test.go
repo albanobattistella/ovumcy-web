@@ -21,18 +21,18 @@ func TestSymptomRoutesRequireAuthJSON(t *testing.T) {
 		{
 			name:   "list",
 			method: http.MethodGet,
-			path:   "/api/symptoms",
+			path:   "/api/v1/symptoms",
 		},
 		{
 			name:   "create",
 			method: http.MethodPost,
-			path:   "/api/symptoms",
+			path:   "/api/v1/symptoms",
 			body:   `{"name":"Joint stiffness","icon":"J","color":"#334455"}`,
 		},
 		{
-			name:   "archive",
-			method: http.MethodPost,
-			path:   "/api/symptoms/1/archive",
+			name:   "delete",
+			method: http.MethodDelete,
+			path:   "/api/v1/symptoms/1",
 		},
 	}
 
@@ -78,18 +78,18 @@ func TestSymptomRoutesRejectUnsupportedLegacyRoleJSON(t *testing.T) {
 		{
 			name:   "list",
 			method: http.MethodGet,
-			path:   "/api/symptoms",
+			path:   "/api/v1/symptoms",
 		},
 		{
 			name:   "create",
 			method: http.MethodPost,
-			path:   "/api/symptoms",
+			path:   "/api/v1/symptoms",
 			body:   `{"name":"Joint stiffness","icon":"J","color":"#334455"}`,
 		},
 		{
-			name:   "archive",
-			method: http.MethodPost,
-			path:   "/api/symptoms/1/archive",
+			name:   "delete",
+			method: http.MethodDelete,
+			path:   "/api/v1/symptoms/1",
 		},
 	}
 

@@ -17,7 +17,7 @@ func TestProfileUpdateHTMXStatusMarkupIsNonTransient(t *testing.T) {
 	form := url.Values{
 		"display_name": {"Nora"},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Cookie", authCookie)
 	request.Header.Set("HX-Request", "true")

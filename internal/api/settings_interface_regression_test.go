@@ -11,7 +11,7 @@ import (
 func TestSettingsInterfaceUpdateSetsLanguageCookieAndLocalizedFlash(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-interface@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/interface", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPatch, "/api/v1/users/current/interface", url.Values{
 		"language": {"de-DE"},
 		"theme":    {"dark"},
 	}, nil)
@@ -52,7 +52,7 @@ func TestSettingsInterfaceUpdateSetsLanguageCookieAndLocalizedFlash(t *testing.T
 func TestSettingsInterfaceUpdateJSONReturnsNormalizedSelection(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-interface-json@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/interface", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPatch, "/api/v1/users/current/interface", url.Values{
 		"language": {"fr-FR"},
 		"theme":    {"dark"},
 	}, map[string]string{
@@ -86,7 +86,7 @@ func TestSettingsInterfaceUpdateJSONReturnsNormalizedSelection(t *testing.T) {
 func TestSettingsInterfaceUpdateRejectsInvalidTheme(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-interface-invalid@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/interface", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPatch, "/api/v1/users/current/interface", url.Values{
 		"language": {"en"},
 		"theme":    {"sepia"},
 	}, map[string]string{

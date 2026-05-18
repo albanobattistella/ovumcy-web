@@ -717,7 +717,7 @@ func newAPIRateLimitHandler(handler *api.Handler) fiber.Handler {
 func rateLimitScope(c *fiber.Ctx) string {
 	path := c.Path()
 	switch {
-	case strings.HasPrefix(path, "/api/settings/"), strings.HasPrefix(path, "/settings/"):
+	case strings.HasPrefix(path, "/api/v1/users/current"):
 		return "settings"
 	case isV1AuthPath(path), strings.HasPrefix(path, "/auth/oidc"):
 		return "auth"

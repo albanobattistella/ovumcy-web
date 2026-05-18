@@ -51,7 +51,7 @@ test.describe('Auth: TOTP two-factor authentication', () => {
     const code = generateSync({ secret, strategy: 'totp' });
     await page.locator('input[name="code"]').fill(code);
     await page.locator('#settings-2fa-enroll-password').fill(creds.password);
-    await page.locator('form[action="/api/settings/2fa/verify"] button[type="submit"]').click();
+    await page.locator('form[action="/api/v1/users/current/2fa"] button[type="submit"]').click();
     // Form submit is HTMX-intercepted; wait for the inline success status, then
     // reload to render the management view (DB now has TOTPEnabled=true).
     await expect(page.locator('#settings-2fa-verify-status .status-ok')).toBeVisible({ timeout: 5_000 });
@@ -85,7 +85,7 @@ test.describe('Auth: TOTP two-factor authentication', () => {
     const code = generateSync({ secret, strategy: 'totp' });
     await page.locator('input[name="code"]').fill(code);
     await page.locator('#settings-2fa-enroll-password').fill(creds.password);
-    await page.locator('form[action="/api/settings/2fa/verify"] button[type="submit"]').click();
+    await page.locator('form[action="/api/v1/users/current/2fa"] button[type="submit"]').click();
     // Form submit is HTMX-intercepted; wait for inline success then reload.
     await expect(page.locator('#settings-2fa-verify-status .status-ok')).toBeVisible({ timeout: 5_000 });
     await page.goto('/settings/2fa');
@@ -126,7 +126,7 @@ test.describe('Auth: TOTP two-factor authentication', () => {
     const enrollCode = generateSync({ secret, strategy: 'totp' });
     await page.locator('input[name="code"]').fill(enrollCode);
     await page.locator('#settings-2fa-enroll-password').fill(creds.password);
-    await page.locator('form[action="/api/settings/2fa/verify"] button[type="submit"]').click();
+    await page.locator('form[action="/api/v1/users/current/2fa"] button[type="submit"]').click();
     // Form submit is HTMX-intercepted; wait for the inline success status, then
     // reload to render the management view (DB now has TOTPEnabled=true).
     await expect(page.locator('#settings-2fa-verify-status .status-ok')).toBeVisible({ timeout: 5_000 });
@@ -171,7 +171,7 @@ test.describe('Auth: TOTP two-factor authentication', () => {
     const enrollCode = generateSync({ secret, strategy: 'totp' });
     await page.locator('input[name="code"]').fill(enrollCode);
     await page.locator('#settings-2fa-enroll-password').fill(creds.password);
-    await page.locator('form[action="/api/settings/2fa/verify"] button[type="submit"]').click();
+    await page.locator('form[action="/api/v1/users/current/2fa"] button[type="submit"]').click();
     // Form submit is HTMX-intercepted; wait for the inline success status, then
     // reload to render the management view (DB now has TOTPEnabled=true).
     await expect(page.locator('#settings-2fa-verify-status .status-ok')).toBeVisible({ timeout: 5_000 });
@@ -215,7 +215,7 @@ test.describe('Auth: TOTP two-factor authentication', () => {
     const enrollCode = generateSync({ secret, strategy: 'totp' });
     await page.locator('input[name="code"]').fill(enrollCode);
     await page.locator('#settings-2fa-enroll-password').fill(creds.password);
-    await page.locator('form[action="/api/settings/2fa/verify"] button[type="submit"]').click();
+    await page.locator('form[action="/api/v1/users/current/2fa"] button[type="submit"]').click();
     // Form submit is HTMX-intercepted; wait for the inline success status, then
     // reload to render the management view (DB now has TOTPEnabled=true).
     await expect(page.locator('#settings-2fa-verify-status .status-ok')).toBeVisible({ timeout: 5_000 });

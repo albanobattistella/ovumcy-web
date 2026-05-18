@@ -2,22 +2,19 @@
 
 Ovumcy supports three export endpoints under `Settings → Export`:
 
-- `POST /api/export/json` — full per-day records as JSON.
-- `POST /api/export/csv` — full per-day records as CSV.
-- `POST /api/export/summary` — small JSON summary used by the Settings UI.
+- `GET /api/v1/exports/json` — full per-day records as JSON.
+- `GET /api/v1/exports/csv` — full per-day records as CSV.
+- `GET /api/v1/exports/summary` — small JSON summary used by the Settings UI.
 
-All three accept an optional date range as form fields `from` and `to` (`YYYY-MM-DD`, in the user's timezone). Omitting them exports everything.
+All three accept an optional date range via query parameters `from` and `to` (`YYYY-MM-DD`, in the user's timezone). Omitting them exports everything.
 
-Each export endpoint requires the `owner` role and a valid auth session. CSRF token is required for browser submissions.
+Each export endpoint requires the `owner` role and a valid auth session. CSRF is not required — these are GET reads and the auth cookie alone is sufficient.
 
 ## JSON Export
 
 ```http
-POST /api/export/json
-Content-Type: application/x-www-form-urlencoded
-Cookie: ovumcy_auth=...; ovumcy_csrf=...
-
-csrf_token=...&from=2026-01-01&to=2026-05-31
+GET /api/v1/exports/json?from=2026-01-01&to=2026-05-31
+Cookie: ovumcy_auth=...
 ```
 
 Response headers: `Content-Disposition: attachment; filename="ovumcy-export-<timestamp>.json"`, `Content-Type: application/json`.
@@ -84,7 +81,8 @@ The `symptoms` object always contains the same 15 keys, in this order: `cramps`,
 ## CSV Export
 
 ```http
-POST /api/export/csv
+GET /api/v1/exports/csv?from=2026-01-01&to=2026-05-31
+Cookie: ovumcy_auth=...
 ```
 
 Response headers: `Content-Disposition: attachment; filename="ovumcy-export-<timestamp>.csv"`, `Content-Type: text/csv`.
@@ -111,7 +109,8 @@ Cell semantics:
 ## Summary Export
 
 ```http
-POST /api/export/summary
+GET /api/v1/exports/summary?from=2026-01-01&to=2026-05-31
+Cookie: ovumcy_auth=...
 ```
 
 Response is JSON (not a file download), used by the Settings UI before showing the full export buttons:

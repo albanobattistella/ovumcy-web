@@ -191,7 +191,7 @@ test.describe('Bug regressions', () => {
       // Remove onboarding-generated logs so cycle-day math is anchored only by the date
       // we set in cycle settings below.
       const csrfToken = (await page.locator('meta[name="csrf-token"]').getAttribute('content')) ?? '';
-      const clearResponse = await page.request.post('/api/settings/clear-data', {
+      const clearResponse = await page.request.post('/api/v1/users/current/data-wipe', {
         form: {
           csrf_token: csrfToken,
           password: creds.password,
@@ -203,7 +203,7 @@ test.describe('Bug regressions', () => {
       await page.goto('/settings');
       await expect(page).toHaveURL(/\/settings$/);
 
-      const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+      const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
       await expect(cycleForm).toBeVisible();
       await fillDateField(
         cycleForm.locator('#settings-last-period-start'),
@@ -257,7 +257,7 @@ test.describe('Bug regressions', () => {
       await expect(page).toHaveURL(/\/settings$/);
 
       const csrfToken = (await page.locator('meta[name="csrf-token"]').getAttribute('content')) ?? '';
-      const clearResponse = await page.request.post('/api/settings/clear-data', {
+      const clearResponse = await page.request.post('/api/v1/users/current/data-wipe', {
         form: {
           csrf_token: csrfToken,
           password: creds.password,
@@ -269,7 +269,7 @@ test.describe('Bug regressions', () => {
       await page.goto('/settings');
       await expect(page).toHaveURL(/\/settings$/);
 
-      const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+      const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
       const todayISO = await browserLocalISODate(page);
       await fillDateField(cycleForm.locator('#settings-last-period-start'), shiftISODate(todayISO, -4));
       await setRangeValue('#settings-cycle-length', page, 28);
@@ -310,8 +310,8 @@ test.describe('Bug regressions', () => {
       const onboardingDate = `${monthAnchor.getFullYear()}-${String(monthAnchor.getMonth() + 1).padStart(2, '0')}-05`;
 
       await fillDateField(page.locator('#last-period-start'), onboardingDate);
-      await page.locator('form[hx-post="/onboarding/step1"] button[type="submit"]').click();
-      await expect(page.locator('form[hx-post="/onboarding/step2"]')).toBeVisible();
+      await page.locator('form[hx-post="/api/v1/onboarding/steps/1"] button[type="submit"]').click();
+      await expect(page.locator('form[hx-post="/api/v1/onboarding/steps/2"]')).toBeVisible();
 
       const autoFillToggle = page.locator('label[data-binary-toggle]:has(input[name="auto_period_fill"])');
       const autoFillCheckbox = page.locator('input[name="auto_period_fill"]');
@@ -319,7 +319,7 @@ test.describe('Bug regressions', () => {
       await autoFillToggle.click();
       await expect(autoFillCheckbox).not.toBeChecked();
 
-      await page.locator('form[hx-post="/onboarding/step2"] button[type="submit"]').click();
+      await page.locator('form[hx-post="/api/v1/onboarding/steps/2"] button[type="submit"]').click();
       await expect(page).toHaveURL(/\/dashboard(?:\?.*)?$/);
 
       await page.goto(`/calendar?month=${onboardingDate.slice(0, 7)}&day=${onboardingDate}`);
@@ -338,7 +338,7 @@ test.describe('Bug regressions', () => {
       await expect(page).toHaveURL(/\/settings$/);
 
       const csrfToken = (await page.locator('meta[name="csrf-token"]').getAttribute('content')) ?? '';
-      const clearResponse = await page.request.post('/api/settings/clear-data', {
+      const clearResponse = await page.request.post('/api/v1/users/current/data-wipe', {
         form: {
           csrf_token: csrfToken,
           password: creds.password,
@@ -350,7 +350,7 @@ test.describe('Bug regressions', () => {
       await page.goto('/settings');
       await expect(page).toHaveURL(/\/settings$/);
 
-      const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+      const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
       const todayISO = await browserLocalISODate(page);
       const lastPeriodStart = shiftISODate(todayISO, -14);
       const nextPeriodStart = shiftISODate(lastPeriodStart, 28);
@@ -468,7 +468,7 @@ test.describe('Bug regressions', () => {
       const nameInput = page.locator('#settings-display-name');
       await nameInput.fill(newName);
 
-      await page.locator('form[action="/api/settings/profile"] button[data-save-button]').click();
+      await page.locator('form[action="/api/v1/users/current/profile"] button[data-save-button]').click();
       await expect(page.locator('#settings-profile-status .status-ok')).toBeVisible();
 
       await expect(identityChip).toContainText(newName);
@@ -498,7 +498,7 @@ test.describe('Bug regressions', () => {
       await page.goto('/settings');
       await expect(page).toHaveURL(/\/settings$/);
 
-      const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+      const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
       await expect(cycleForm).toBeVisible();
 
       await setRangeValue('#settings-cycle-length', page, 15);
@@ -550,7 +550,7 @@ test.describe('Bug regressions', () => {
       await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
 
       const csrfToken = (await page.locator('meta[name="csrf-token"]').getAttribute('content')) ?? '';
-      const clearResponse = await page.request.post('/api/settings/clear-data', {
+      const clearResponse = await page.request.post('/api/v1/users/current/data-wipe', {
         form: {
           csrf_token: csrfToken,
           password: creds.password,

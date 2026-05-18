@@ -16,7 +16,7 @@ import (
 //
 // Sister test to TestClearDataRemovesTrackedCalendarEntriesAndResetsCycleSettings,
 // which covers the inverse claim (what clear-data DOES wipe). Together they form
-// the contract for `POST /api/settings/clear-data`.
+// the contract for `POST /api/v1/users/current/data-wipe`.
 func TestClearDataPreservesAccountIdentityFields(t *testing.T) {
 	scenario := setupClearDataScenario(t)
 
@@ -57,7 +57,7 @@ func TestClearDataPreservesAccountIdentityFields(t *testing.T) {
 		authCookie: scenario.authCookie,
 		csrfCookie: scenario.csrfCookie,
 		csrfToken:  scenario.csrfToken,
-	}, http.MethodPost, "/api/settings/clear-data", url.Values{
+	}, http.MethodPost, "/api/v1/users/current/data-wipe", url.Values{
 		"password": {"StrongPass1"},
 	}, map[string]string{
 		"Accept": "application/json",

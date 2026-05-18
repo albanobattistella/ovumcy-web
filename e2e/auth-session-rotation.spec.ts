@@ -53,7 +53,7 @@ test.describe('Auth session rotation', () => {
 
       // Make a benign change on /settings so the originating context has a
       // visible artifact to confirm the fresh cookie kept it signed in.
-      const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+      const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
       await expect(cycleForm).toBeVisible();
       await setRangeValue(page.locator('#settings-cycle-length'), 29);
       await cycleForm.locator('button[data-save-button]').click();
@@ -64,11 +64,11 @@ test.describe('Auth session rotation', () => {
       // cookie to the current request only.
       await page
         .locator(
-          'form[action="/api/settings/regenerate-recovery-code"] #settings-recovery-code-password'
+          'form[action="/api/v1/users/current/recovery-code"] #settings-recovery-code-password'
         )
         .fill(state.password);
       await page
-        .locator('form[action="/api/settings/regenerate-recovery-code"] button[type="submit"]')
+        .locator('form[action="/api/v1/users/current/recovery-code"] button[type="submit"]')
         .click();
       await expect(page.locator('#confirm-modal')).toBeVisible();
       await page.locator('#confirm-modal-accept').click();

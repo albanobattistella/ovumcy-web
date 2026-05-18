@@ -17,7 +17,7 @@ func TestSettingsFlashErrorTakesPrecedenceOverQueryError(t *testing.T) {
 		"new_password":     {"EvenStronger2"},
 		"confirm_password": {"EvenStronger2"},
 	}
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", form, nil)
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", form, nil)
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusSeeOther {
@@ -78,7 +78,7 @@ func TestSettingsFlashSuccessTakesPrecedenceOverQueryStatus(t *testing.T) {
 
 	form := url.Values{"display_name": {"Maya"}}
 	form.Set("csrf_token", ctx.csrfToken)
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Cookie", settingsCookieHeader(ctx.authCookie, ctx.csrfCookie))
 

@@ -36,15 +36,15 @@ async function signInViaOIDCOnlyAndEnableLocalPassword(page: Page) {
   if (await localPasswordForm.isVisible().catch(() => false)) {
     // OIDC-only users now must complete a step-up re-auth before a local
     // password is committed. Submitting the form posts to
-    // /api/settings/start-local-password-setup, which redirects to the
+    // /api/v1/users/current/password/step-up, which redirects to the
     // provider's authorize endpoint with prompt=login + max_age=0. The full
     // round-trip back through /auth/oidc/callback into /recovery-code depends
     // on the test provider honoring those parameters and cannot be exercised
     // without a controllable IdP — assert the redirect to the provider as the
     // closest end-to-end signal.
     await expect(page.locator('[data-settings-recovery-code-unavailable]')).toBeVisible();
-    await expect(page.locator('form[action="/api/settings/regenerate-recovery-code"]')).toHaveCount(0);
-    await expect(localPasswordForm).toHaveAttribute('action', '/api/settings/start-local-password-setup');
+    await expect(page.locator('form[action="/api/v1/users/current/recovery-code"]')).toHaveCount(0);
+    await expect(localPasswordForm).toHaveAttribute('action', '/api/v1/users/current/password/step-up');
 
     const localPassword = 'LocalStrongPass2';
     await page.locator('#settings-new-password').fill(localPassword);

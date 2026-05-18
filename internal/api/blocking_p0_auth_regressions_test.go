@@ -45,7 +45,7 @@ func TestOnboardingStep1ShowsLocalizedErrorWhenDateMissing(t *testing.T) {
 	form := url.Values{
 		"last_period_start": {""},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step1", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/1", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Accept-Language", "ru")

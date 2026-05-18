@@ -54,7 +54,7 @@ test.describe('Security and role-based access', () => {
 
     const payload = `<img src=x onerror=alert('xss-profile')>`;
     await page.locator('#settings-display-name').fill(payload);
-    await page.locator('form[action="/api/settings/profile"] button[data-save-button]').click();
+    await page.locator('form[action="/api/v1/users/current/profile"] button[data-save-button]').click();
 
     const primaryNavUserChip = page.locator('[data-nav-account-actions] #nav-user-chip-desktop');
 
@@ -106,13 +106,13 @@ test.describe('Security and role-based access', () => {
     });
     expect(logoutNoCsrf.status()).toBe(403);
 
-    const clearNoCsrf = await page.request.post('/api/settings/clear-data', {
+    const clearNoCsrf = await page.request.post('/api/v1/users/current/data-wipe', {
       form: {},
       maxRedirects: 0,
     });
     expect(clearNoCsrf.status()).toBe(403);
 
-    const exportNoCsrf = await page.request.post('/api/export/csv', {
+    const exportNoCsrf = await page.request.get('/api/v1/exports/csv', {
       form: {},
       maxRedirects: 0,
     });
@@ -120,7 +120,7 @@ test.describe('Security and role-based access', () => {
 
     const csrfToken = await readCSRFToken(page);
 
-    const clearWithCsrf = await page.request.post('/api/settings/clear-data', {
+    const clearWithCsrf = await page.request.post('/api/v1/users/current/data-wipe', {
       form: {
         csrf_token: csrfToken,
         password: creds.password,
@@ -147,9 +147,9 @@ test.describe('Security and role-based access', () => {
     await expect(page.locator('section#settings-cycle')).toBeVisible();
     await expect(page.locator('#settings-symptoms-section')).toBeVisible();
     await expect(page.locator('[data-export-section]')).toBeVisible();
-    await expect(page.locator('form[action="/api/settings/clear-data"]')).toBeVisible();
+    await expect(page.locator('form[action="/api/v1/users/current/data-wipe"]')).toBeVisible();
 
-    const exportResponse = await page.request.post('/api/export/csv', {
+    const exportResponse = await page.request.get('/api/v1/exports/csv', {
       form: { csrf_token: await readCSRFToken(page) },
     });
     expect(exportResponse.status()).toBe(200);

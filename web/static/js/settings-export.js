@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var SUMMARY_ENDPOINT = "/api/export/summary";
+  var SUMMARY_ENDPOINT = "/api/v1/exports/summary";
   var SUMMARY_REFRESH_DELAY_MS = 160;
   var DOWNLOAD_REVOKE_DELAY_MS = 500;
   var CALENDAR_MIN_YEAR = 1900;
@@ -158,10 +158,6 @@
 
   function buildExportRequestBody(fromValue, toValue) {
     var payload = new URLSearchParams();
-    var csrfToken = readCSRFToken();
-    if (csrfToken) {
-      payload.set("csrf_token", csrfToken);
-    }
     if (fromValue) {
       payload.set("from", fromValue);
     }
@@ -669,9 +665,9 @@
 
       var requestID = ++summaryRequestID;
       try {
-        var response = await fetch(SUMMARY_ENDPOINT, {
-          method: "POST",
-          body: requestBody,
+        var summaryURL = SUMMARY_ENDPOINT + (requestBody ? "?" + requestBody : "");
+        var response = await fetch(summaryURL, {
+          method: "GET",
           credentials: "same-origin",
           headers: buildAcceptLanguageHeaders(),
           signal: summaryAbortController ? summaryAbortController.signal : undefined
@@ -1013,9 +1009,9 @@
       setButtonDisabled(action, true);
 
       try {
-        var response = await fetch(baseEndpoint, {
-          method: "POST",
-          body: requestBody,
+        var exportURL = baseEndpoint + (requestBody ? "?" + requestBody : "");
+        var response = await fetch(exportURL, {
+          method: "GET",
           credentials: "same-origin",
           headers: buildAcceptLanguageHeaders()
         });

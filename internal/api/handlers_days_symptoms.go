@@ -107,10 +107,6 @@ func (handler *Handler) UpdateSymptom(c *fiber.Ctx) error {
 	})
 }
 
-func (handler *Handler) ArchiveSymptom(c *fiber.Ctx) error {
-	return handler.archiveSymptom(c)
-}
-
 func (handler *Handler) DeleteSymptom(c *fiber.Ctx) error {
 	return handler.archiveSymptom(c)
 }

@@ -45,9 +45,9 @@
       setButtonDisabled(action, true);
 
       try {
-        var response = await fetch(baseEndpoint, {
-          method: "POST",
-          body: requestBody,
+        var exportURL = baseEndpoint + (requestBody ? "?" + requestBody : "");
+        var response = await fetch(exportURL, {
+          method: "GET",
           credentials: "same-origin",
           headers: buildAcceptLanguageHeaders()
         });

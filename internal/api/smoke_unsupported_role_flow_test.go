@@ -71,7 +71,7 @@ func TestUnsupportedLegacyRoleAPIAccessIsRejected(t *testing.T) {
 	user.Role = "partner"
 	authCookie := issueAuthCookieForUser(t, user)
 
-	request := newExportRequestForTest(t, "/api/export/csv?from=2026-02-01&to=2026-02-28", authCookie)
+	request := newExportRequestForTest(t, "/api/v1/exports/csv?from=2026-02-01&to=2026-02-28", authCookie)
 	response := mustAppResponse(t, app, request)
 	assertStatusCode(t, response, http.StatusForbidden)
 	if got := readAPIError(t, response.Body); got != "web sign-in unavailable" {

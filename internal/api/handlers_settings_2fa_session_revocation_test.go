@@ -35,7 +35,7 @@ func TestVerifyTOTP2FAEnrollment_BumpsSessionVersion(t *testing.T) {
 	}
 
 	form := url.Values{"code": {code}, "password": {"StrongPass1"}, "csrf_token": {ctx.csrfToken}}
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/2fa/verify", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/users/current/2fa", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Cookie", joinCookieHeader(ctx.authCookie, cookiePair(ctx.csrfCookie), setupCookie))
 	resp, err := ctx.app.Test(req, -1)
@@ -86,7 +86,7 @@ func TestDisableTOTP2FA_BumpsSessionVersion(t *testing.T) {
 	preDisableVersion := ctx.user.AuthSessionVersion
 
 	form := url.Values{"password": {"StrongPass1"}}
-	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/2fa/disable", form, nil)
+	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/v1/users/current/2fa", form, nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("disable status = %d, want 200 or 303", resp.StatusCode)

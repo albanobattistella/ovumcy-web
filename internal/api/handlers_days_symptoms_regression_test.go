@@ -16,7 +16,7 @@ func TestCreateSymptomRejectsInvalidName(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "create-symptom-invalid-name@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms", strings.NewReader(`{"name":"   ","icon":"x","color":"#123456"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/symptoms", strings.NewReader(`{"name":"   ","icon":"x","color":"#123456"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
@@ -40,7 +40,7 @@ func TestCreateSymptomRejectsInvalidColor(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "create-symptom-invalid-color@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms", strings.NewReader(`{"name":"Custom","icon":"x","color":"not-a-color"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/symptoms", strings.NewReader(`{"name":"Custom","icon":"x","color":"not-a-color"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
@@ -74,7 +74,7 @@ func TestCreateSymptomRejectsDuplicateName(t *testing.T) {
 		t.Fatalf("create existing custom symptom: %v", err)
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms", strings.NewReader(`{"name":" cUsToM ","icon":"y","color":"#abcdef"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/symptoms", strings.NewReader(`{"name":" cUsToM ","icon":"y","color":"#abcdef"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
@@ -98,7 +98,7 @@ func TestCreateSymptomRejectsLocalizedBuiltinName(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "create-symptom-localized-builtin@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms", strings.NewReader(`{"name":"Усталость","icon":"x","color":"#123456"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/symptoms", strings.NewReader(`{"name":"Усталость","icon":"x","color":"#123456"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
@@ -122,7 +122,7 @@ func TestCreateSymptomRejectsMarkupLikeName(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "create-symptom-markup@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms", strings.NewReader(`{"name":"<script>alert(1)</script>","icon":"x","color":"#123456"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/symptoms", strings.NewReader(`{"name":"<script>alert(1)</script>","icon":"x","color":"#123456"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
@@ -146,7 +146,7 @@ func TestCreateSymptomRejectsTooLongName(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "create-symptom-too-long@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms", strings.NewReader(`{"name":"12345678901234567890123456789012345678901","icon":"x","color":"#123456"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/symptoms", strings.NewReader(`{"name":"12345678901234567890123456789012345678901","icon":"x","color":"#123456"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
@@ -170,7 +170,7 @@ func TestArchiveSymptomReturnsNotFoundWhenMissing(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "hide-symptom-missing@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms/999999/archive", nil)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/symptoms/999999", nil)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
 
@@ -204,7 +204,7 @@ func TestArchiveSymptomRejectsBuiltinSymptom(t *testing.T) {
 		t.Fatalf("create builtin symptom: %v", err)
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms/"+strconv.FormatUint(uint64(symptom.ID), 10)+"/archive", nil)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/symptoms/"+strconv.FormatUint(uint64(symptom.ID), 10), nil)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
 
@@ -227,7 +227,7 @@ func TestArchiveSymptomRejectsOutOfRangeID(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "hide-symptom-out-of-range@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms/"+overflowUintStringForTest()+"/archive", nil)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/symptoms/"+overflowUintStringForTest(), nil)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
 
@@ -272,7 +272,7 @@ func TestRestoreSymptomRejectsDuplicateActiveName(t *testing.T) {
 		t.Fatalf("create archived symptom: %v", err)
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/symptoms/"+strconv.FormatUint(uint64(archivedSymptom.ID), 10)+"/restore", nil)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/symptoms/"+strconv.FormatUint(uint64(archivedSymptom.ID), 10)+"/restore", nil)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
 

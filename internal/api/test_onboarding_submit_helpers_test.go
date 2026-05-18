@@ -13,7 +13,7 @@ import (
 func submitOnboardingStep1(t *testing.T, app *fiber.App, authCookie string, form url.Values) {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step1", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/1", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", authCookie)
@@ -32,7 +32,7 @@ func submitOnboardingStep1(t *testing.T, app *fiber.App, authCookie string, form
 func submitOnboardingStep2(t *testing.T, app *fiber.App, authCookie string, form url.Values) {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step2", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/2", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", authCookie)
@@ -51,7 +51,7 @@ func submitOnboardingStep2(t *testing.T, app *fiber.App, authCookie string, form
 func submitOnboardingComplete(t *testing.T, app *fiber.App, authCookie string) {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/complete", nil)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/complete", nil)
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", authCookie)
 

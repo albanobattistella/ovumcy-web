@@ -207,8 +207,8 @@ func TestSettingsInterfaceSectionRendersSaveDiscardContract(t *testing.T) {
 	if form == nil {
 		t.Fatal("expected interface settings form")
 	}
-	if got := htmlAttr(form, "action"); got != "/api/settings/interface" {
-		t.Fatalf("expected interface form action /api/settings/interface, got %q", got)
+	if got := htmlAttr(form, "action"); got != "/api/v1/users/current/interface" {
+		t.Fatalf("expected interface form action /api/v1/users/current/interface, got %q", got)
 	}
 	if htmlFindElement(form, func(node *html.Node) bool {
 		return node.Type == html.ElementNode && htmlHasAttr(node, "data-settings-interface-save")
@@ -252,7 +252,7 @@ func TestSettingsDangerZoneDeleteAccountCardShowsVisibleTitle(t *testing.T) {
 	document := mustParseHTMLDocument(t, mustReadBodyString(t, response.Body))
 	deleteCard := htmlFindElement(document, func(node *html.Node) bool {
 		return node.Type == html.ElementNode && htmlHasClass(node, "danger-card-soft") && htmlFindElement(node, func(child *html.Node) bool {
-			return child.Type == html.ElementNode && htmlAttr(child, "hx-delete") == "/api/settings/delete-account"
+			return child.Type == html.ElementNode && htmlAttr(child, "hx-delete") == "/api/v1/users/current"
 		}) != nil
 	})
 	if deleteCard == nil {

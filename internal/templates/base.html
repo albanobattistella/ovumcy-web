@@ -702,9 +702,9 @@
   </div>
 
   <form
-    action="/api/symptoms/{{.Symptom.ID}}"
+    action="/api/v1/symptoms/{{.Symptom.ID}}"
     method="post"
-    hx-post="/api/symptoms/{{.Symptom.ID}}"
+    hx-patch="/api/v1/symptoms/{{.Symptom.ID}}"
     hx-target="#settings-symptoms-section"
     hx-swap="outerHTML"
     class="settings-symptom-form"
@@ -748,9 +748,9 @@
   <div class="settings-symptom-card-actions">
     {{if .Symptom.IsActive}}
     <form
-      action="/api/symptoms/{{.Symptom.ID}}/archive"
+      action="/api/v1/symptoms/{{.Symptom.ID}}"
       method="post"
-      hx-post="/api/symptoms/{{.Symptom.ID}}/archive"
+      hx-delete="/api/v1/symptoms/{{.Symptom.ID}}"
       hx-target="#settings-symptoms-section"
       hx-swap="outerHTML"
       data-confirm="{{t $.Messages "settings.symptoms.confirm_hide"}}"
@@ -760,9 +760,9 @@
     </form>
     {{else}}
     <form
-      action="/api/symptoms/{{.Symptom.ID}}/restore"
+      action="/api/v1/symptoms/{{.Symptom.ID}}/restore"
       method="post"
-      hx-post="/api/symptoms/{{.Symptom.ID}}/restore"
+      hx-post="/api/v1/symptoms/{{.Symptom.ID}}/restore"
       hx-target="#settings-symptoms-section"
       hx-swap="outerHTML">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
@@ -780,9 +780,9 @@
   </div>
 
   <form
-    action="/api/symptoms"
+    action="/api/v1/symptoms"
     method="post"
-    hx-post="/api/symptoms"
+    hx-post="/api/v1/symptoms"
     hx-target="#settings-symptoms-section"
     hx-swap="outerHTML"
     class="settings-symptom-form"

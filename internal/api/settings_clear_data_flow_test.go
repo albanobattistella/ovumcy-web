@@ -14,7 +14,7 @@ func TestClearDataRemovesTrackedCalendarEntriesAndResetsCycleSettings(t *testing
 		authCookie: scenario.authCookie,
 		csrfCookie: scenario.csrfCookie,
 		csrfToken:  scenario.csrfToken,
-	}, http.MethodPost, "/api/settings/clear-data", url.Values{
+	}, http.MethodPost, "/api/v1/users/current/data-wipe", url.Values{
 		"password": {"StrongPass1"},
 	}, map[string]string{
 		"Accept": "application/json",
@@ -36,7 +36,7 @@ func TestClearDataRejectsMissingPassword(t *testing.T) {
 		authCookie: scenario.authCookie,
 		csrfCookie: scenario.csrfCookie,
 		csrfToken:  scenario.csrfToken,
-	}, http.MethodPost, "/api/settings/clear-data", url.Values{}, map[string]string{
+	}, http.MethodPost, "/api/v1/users/current/data-wipe", url.Values{}, map[string]string{
 		"Accept": "application/json",
 	})
 	defer response.Body.Close()
@@ -58,7 +58,7 @@ func TestClearDataRejectsInvalidPassword(t *testing.T) {
 		authCookie: scenario.authCookie,
 		csrfCookie: scenario.csrfCookie,
 		csrfToken:  scenario.csrfToken,
-	}, http.MethodPost, "/api/settings/clear-data", url.Values{
+	}, http.MethodPost, "/api/v1/users/current/data-wipe", url.Values{
 		"password": {"WrongPass1"},
 	}, map[string]string{
 		"Accept": "application/json",
@@ -82,7 +82,7 @@ func TestValidateClearDataPasswordAcceptsCorrectPassword(t *testing.T) {
 		authCookie: scenario.authCookie,
 		csrfCookie: scenario.csrfCookie,
 		csrfToken:  scenario.csrfToken,
-	}, http.MethodPost, "/api/settings/clear-data/validate", url.Values{
+	}, http.MethodPost, "/api/v1/users/current/data-wipe/validate", url.Values{
 		"password": {"StrongPass1"},
 	}, map[string]string{
 		"Accept": "application/json",
@@ -102,7 +102,7 @@ func TestValidateClearDataPasswordRejectsInvalidPassword(t *testing.T) {
 		authCookie: scenario.authCookie,
 		csrfCookie: scenario.csrfCookie,
 		csrfToken:  scenario.csrfToken,
-	}, http.MethodPost, "/api/settings/clear-data/validate", url.Values{
+	}, http.MethodPost, "/api/v1/users/current/data-wipe/validate", url.Values{
 		"password": {"WrongPass1"},
 	}, map[string]string{
 		"Accept": "application/json",

@@ -42,7 +42,7 @@ func TestOnboardingStep1PostRejectsRequestsMissingCSRFToken(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "onboarding-csrf@example.com", "StrongPass1", false)
 	authCookie := loginAndExtractAuthCookieWithCSRF(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step1", strings.NewReader(url.Values{
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/1", strings.NewReader(url.Values{
 		"cycle_length":  {"28"},
 		"period_length": {"5"},
 	}.Encode()))
@@ -65,7 +65,7 @@ func TestOnboardingStep2PostRejectsRequestsMissingCSRFToken(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "onboarding-step2-csrf@example.com", "StrongPass1", false)
 	authCookie := loginAndExtractAuthCookieWithCSRF(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step2", strings.NewReader(url.Values{
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/2", strings.NewReader(url.Values{
 		"cycle_length":  {"28"},
 		"period_length": {"5"},
 	}.Encode()))
@@ -88,7 +88,7 @@ func TestOnboardingCompletePostRejectsRequestsMissingCSRFToken(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "onboarding-complete-csrf@example.com", "StrongPass1", false)
 	authCookie := loginAndExtractAuthCookieWithCSRF(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/complete", strings.NewReader(url.Values{}.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/complete", strings.NewReader(url.Values{}.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Cookie", authCookie)
 

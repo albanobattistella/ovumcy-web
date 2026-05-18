@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: The entire HTTP surface moves under `/api/v1/*` and ships as the stable third-party contract. The legacy `/api/*` (non-v1) and the page-route mutators at `/settings/cycle` and `/onboarding/*` are removed.
+
+  Full mapping (canonical REST verbs):
+
+  | Legacy | Canonical `/api/v1/*` |
+  | --- | --- |
+  | `POST /api/auth/register` | `POST /api/v1/users` |
+  | `POST /api/auth/login` | `POST /api/v1/sessions` |
+  | `POST /api/auth/logout` | `DELETE /api/v1/sessions/current` |
+  | `POST /api/auth/2fa` | `POST /api/v1/sessions/2fa-challenge` |
+  | `POST /api/auth/forgot-password` | `POST /api/v1/password-resets` |
+  | `POST /api/auth/reset-password` | `POST /api/v1/password-resets/redeem` |
+  | `GET /api/days` | `GET /api/v1/days` |
+  | `GET /api/days/{date}` | `GET /api/v1/days/{date}` |
+  | `GET /api/days/{date}/exists` | `HEAD /api/v1/days/{date}` |
+  | `POST /api/days/{date}` (upsert) | `PUT /api/v1/days/{date}` |
+  | `DELETE /api/days/{date}` | `DELETE /api/v1/days/{date}` |
+  | `POST /api/days/{date}/cycle-start` | `POST /api/v1/days/{date}/cycle-start` |
+  | `DELETE /api/log/delete?date=` | `DELETE /api/v1/days?date=` |
+  | `GET /api/symptoms` | `GET /api/v1/symptoms` |
+  | `POST /api/symptoms` | `POST /api/v1/symptoms` |
+  | `POST /api/symptoms/{id}` (update) | `PATCH /api/v1/symptoms/{id}` |
+  | `POST /api/symptoms/{id}/archive` & `DELETE /api/symptoms/{id}` | `DELETE /api/v1/symptoms/{id}` (single canonical path) |
+  | `POST /api/symptoms/{id}/restore` | `POST /api/v1/symptoms/{id}/restore` |
+  | `GET /api/stats/overview` | `GET /api/v1/stats/overview` |
+  | `POST /api/export/{summary,csv,json}` | `GET /api/v1/exports/{summary,csv,json}?from=&to=` |
+  | `POST /api/settings/profile` | `PATCH /api/v1/users/current/profile` |
+  | `POST /api/settings/interface` | `PATCH /api/v1/users/current/interface` |
+  | `POST /api/settings/tracking` | `PATCH /api/v1/users/current/tracking` |
+  | `POST /settings/cycle` (page route) | `PATCH /api/v1/users/current/cycle` |
+  | `POST /api/settings/change-password` | `PUT /api/v1/users/current/password` |
+  | `POST /api/settings/start-local-password-setup` | `POST /api/v1/users/current/password/step-up` |
+  | `POST /api/settings/regenerate-recovery-code` | `POST /api/v1/users/current/recovery-code` |
+  | `POST /api/settings/2fa/verify` | `PUT /api/v1/users/current/2fa` |
+  | `POST /api/settings/2fa/disable` | `DELETE /api/v1/users/current/2fa` |
+  | `POST /api/settings/clear-data/validate` | `POST /api/v1/users/current/data-wipe/validate` |
+  | `POST /api/settings/clear-data` | `POST /api/v1/users/current/data-wipe` |
+  | `DELETE /api/settings/delete-account` | `DELETE /api/v1/users/current` |
+  | `POST /onboarding/step1` (page route) | `POST /api/v1/onboarding/steps/1` |
+  | `POST /onboarding/step2` (page route) | `POST /api/v1/onboarding/steps/2` |
+  | `POST /onboarding/complete` (page route) | `POST /api/v1/onboarding/complete` |
+
+### Added
+
+- `GET /api/v1/users/current` ("whoami"): returns the minimum representation of the session subject — id, email, display_name, role, and lifecycle flags (`onboarding_completed`, `local_auth_enabled`, `must_change_password`). Sensitive fields (password/recovery hashes, TOTP secret) are never included.
+
 ## [0.9.5] - 2026-05-15
 
 ### Added

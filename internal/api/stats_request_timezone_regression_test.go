@@ -28,7 +28,7 @@ func TestStatsOverviewUsesRequestTimezoneForCycleContext(t *testing.T) {
 		t.Fatalf("update timezone stats baseline: %v", err)
 	}
 
-	request := httptest.NewRequest(http.MethodGet, "/api/stats/overview", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/stats/overview", nil)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", joinCookieHeader(authCookie, timezoneCookieName+"="+timezoneName))
 	request.Header.Set(timezoneHeaderName, timezoneName)

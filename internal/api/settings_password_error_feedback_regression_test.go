@@ -18,7 +18,7 @@ func TestSettingsChangePasswordInvalidCurrentPasswordShowsTopErrorBanner(t *test
 		"new_password":     {"EvenStronger2"},
 		"confirm_password": {"EvenStronger2"},
 	}
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", form, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", form, map[string]string{
 		"Accept-Language": "en",
 	})
 	defer response.Body.Close()

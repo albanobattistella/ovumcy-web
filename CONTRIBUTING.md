@@ -50,15 +50,15 @@ Security issues should not be reported publicly. Use [SECURITY.md](SECURITY.md).
 
 ## API Stability Contract
 
-`internal/api/routes.go` is the source of truth for HTTP endpoints. There is no separate OpenAPI specification.
+`internal/api/routes.go` is the source of truth for HTTP endpoints; [docs/openapi.yaml](../docs/openapi.yaml) is the authoritative description of the JSON surface.
 
-The `/api/*` surface is the HTMX backend for the bundled web UI. Endpoints content-negotiate and emit JSON when the client sends `Accept: application/json` or sets `HX-Request: true` with a JSON sub-format, but the JSON shape is **not** treated as a stable third-party API:
+`/api/v1/*` is the canonical, stable HTTP surface. External wrappers and integrations should target this prefix exclusively. Endpoints content-negotiate and emit JSON when the client sends `Accept: application/json` (or HTML/HTMX otherwise), so the JSON shape is part of the v1 contract:
 
-- Field additions are non-breaking and may ship in any release.
-- Field renames, removals, status code changes, route moves, and error key changes may ship in any minor release without a deprecation cycle.
-- The export payload (`POST /api/export/{json,csv,summary}`) is the one exception: it follows the stability contract documented in [docs/export.md](../docs/export.md).
+- Field additions are non-breaking and may ship in any minor release.
+- Field renames, removals, status code changes, route moves, and error key changes are breaking; they require a new major version (`/api/v2/*`) shipped alongside `/api/v1/*` long enough for callers to migrate.
+- The export payload (`GET /api/v1/exports/{json,csv,summary}`) follows the separate stability contract documented in [docs/export.md](../docs/export.md).
 
-If you are scripting against `/api/*` from outside the bundled UI, pin to a specific image tag and re-validate on every upgrade. If you need a long-term stable API, file an issue describing the use case so we can scope a versioned surface explicitly.
+If you are scripting against `/api/v1/*` from outside the bundled UI, pin to a specific image tag and re-validate on every upgrade — `v1.x.y` minor bumps are safe; major bumps surface in [CHANGELOG.md](../CHANGELOG.md) with the breaking entries called out.
 
 ## Commit Style
 

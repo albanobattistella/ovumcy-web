@@ -18,7 +18,7 @@ func submitSettingsCycleUpdate(t *testing.T, app *fiber.App, authCookie string, 
 		form.Set("csrf_token", csrfToken)
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/settings/cycle", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/cycle", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Accept-Language", "en")

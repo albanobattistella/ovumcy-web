@@ -62,7 +62,7 @@ func TestOwnerCriticalFlowSmoke(t *testing.T) {
 		t.Fatalf("expected day panel to include persisted day notes")
 	}
 
-	exportRequest := newExportRequestForTest(t, "/api/export/csv?from=2026-02-01&to=2026-02-28", authCookie)
+	exportRequest := newExportRequestForTest(t, "/api/v1/exports/csv?from=2026-02-01&to=2026-02-28", authCookie)
 
 	exportResponse, err := app.Test(exportRequest, -1)
 	if err != nil {

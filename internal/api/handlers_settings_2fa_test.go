@@ -121,7 +121,7 @@ func TestShowTOTPSetupPage_TOTPEnabled_ShowsManagementView(t *testing.T) {
 	if strings.Contains(string(body), "data:image/png;base64,") {
 		t.Error("management view should not show QR code when TOTP is already enabled")
 	}
-	if !strings.Contains(string(body), "/api/settings/2fa/disable") {
+	if !strings.Contains(string(body), "/api/v1/users/current/2fa") {
 		t.Error("management view should contain the disable form action")
 	}
 	if !strings.Contains(string(body), `name="password"`) {
@@ -150,13 +150,13 @@ func TestVerifyTOTP2FAEnrollment_ValidCode_EnablesTOTP(t *testing.T) {
 	cloned := cloneFormValues(form)
 	cloned.Set("csrf_token", ctx.csrfToken)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/2fa/verify", strings.NewReader(cloned.Encode()))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/users/current/2fa", strings.NewReader(cloned.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept-Language", "en")
 	req.Header.Set("Cookie", joinCookieHeader(ctx.authCookie, cookiePair(ctx.csrfCookie), setupCookie))
 	resp, err := ctx.app.Test(req, -1)
 	if err != nil {
-		t.Fatalf("POST /api/settings/2fa/verify: %v", err)
+		t.Fatalf("POST /api/v1/users/current/2fa: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -188,13 +188,13 @@ func TestVerifyTOTP2FAEnrollment_InvalidCode_DoesNotEnable(t *testing.T) {
 	cloned := cloneFormValues(form)
 	cloned.Set("csrf_token", ctx.csrfToken)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/2fa/verify", strings.NewReader(cloned.Encode()))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/users/current/2fa", strings.NewReader(cloned.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept-Language", "en")
 	req.Header.Set("Cookie", joinCookieHeader(ctx.authCookie, cookiePair(ctx.csrfCookie), setupCookie))
 	resp, err := ctx.app.Test(req, -1)
 	if err != nil {
-		t.Fatalf("POST /api/settings/2fa/verify: %v", err)
+		t.Fatalf("POST /api/v1/users/current/2fa: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -214,18 +214,18 @@ func TestVerifyTOTP2FAEnrollment_MissingSetupCookie_ReturnsError(t *testing.T) {
 	cloned := cloneFormValues(form)
 	cloned.Set("csrf_token", ctx.csrfToken)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/2fa/verify", strings.NewReader(cloned.Encode()))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/users/current/2fa", strings.NewReader(cloned.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept-Language", "en")
 	req.Header.Set("Cookie", settingsCookieHeader(ctx.authCookie, ctx.csrfCookie))
 	resp, err := ctx.app.Test(req, -1)
 	if err != nil {
-		t.Fatalf("POST /api/settings/2fa/verify: %v", err)
+		t.Fatalf("POST /api/v1/users/current/2fa: %v", err)
 	}
 	defer resp.Body.Close()
 
 	// Without a setup cookie the handler maps to totpSessionExpiredErrorSpec
-	// (401). /api/settings/2fa/verify is not in the auth-redirect path, so the
+	// (401). /api/v1/users/current/2fa is not in the auth-redirect path, so the
 	// status surfaces directly via apiError.
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401 (totp session expired)", resp.StatusCode)
@@ -254,7 +254,7 @@ func TestDisableTOTP2FA_CorrectPassword_DisablesTOTP(t *testing.T) {
 	ctx.refreshAuthCookie(t)
 
 	form := url.Values{"password": {"StrongPass1"}}
-	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/2fa/disable", form, map[string]string{"Accept-Language": "en"})
+	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/v1/users/current/2fa", form, map[string]string{"Accept-Language": "en"})
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusSeeOther {
@@ -281,7 +281,7 @@ func TestDisableTOTP2FA_WrongPassword_ReturnsError(t *testing.T) {
 	}
 
 	form := url.Values{"password": {"WrongPassword1"}}
-	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/2fa/disable", form, map[string]string{"Accept-Language": "en"})
+	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/v1/users/current/2fa", form, map[string]string{"Accept-Language": "en"})
 	defer resp.Body.Close()
 
 	var reloaded models.User
@@ -306,13 +306,13 @@ func TestDisableTOTP2FA_RateLimited_AfterRepeatedWrongPassword(t *testing.T) {
 
 	wrongForm := url.Values{"password": {"WrongPassword1"}}
 	for attempt := 0; attempt < services.DefaultTOTPDisableAttemptsLimit; attempt++ {
-		resp := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/2fa/disable", wrongForm, map[string]string{"Accept-Language": "en"})
+		resp := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/v1/users/current/2fa", wrongForm, map[string]string{"Accept-Language": "en"})
 		resp.Body.Close()
 	}
 
 	// Even the correct password must be rejected once the limiter has tripped.
 	correctForm := url.Values{"password": {"StrongPass1"}}
-	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/2fa/disable", correctForm, map[string]string{"Accept-Language": "en"})
+	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodDelete, "/api/v1/users/current/2fa", correctForm, map[string]string{"Accept-Language": "en"})
 	defer resp.Body.Close()
 
 	var reloaded models.User

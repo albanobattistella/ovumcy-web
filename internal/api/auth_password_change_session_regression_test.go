@@ -10,7 +10,7 @@ import (
 func TestSettingsChangePasswordReissuesSessionAndRejectsPreviousCookie(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "change-password-session@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", url.Values{
 		"current_password": {"StrongPass1"},
 		"new_password":     {"EvenStronger2"},
 		"confirm_password": {"EvenStronger2"},

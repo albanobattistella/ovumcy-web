@@ -35,7 +35,7 @@ export async function registerOwnerAndEnableIrregularMode(
   await page.goto('/settings');
   await expect(page).toHaveURL(/\/settings$/);
 
-  const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+  const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
   await expect(cycleForm).toBeVisible();
   await cycleForm.locator('input[name="irregular_cycle"]').check();
   await cycleForm.locator('button[data-save-button]').click();

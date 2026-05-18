@@ -15,7 +15,7 @@ import (
 func TestTrackingSettingsExposeBBTAndCervicalMucusOnDashboard(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-tracking-dashboard@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/tracking", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPatch, "/api/v1/users/current/tracking", url.Values{
 		"track_bbt":            {"true"},
 		"track_cervical_mucus": {"true"},
 		"temperature_unit":     {"c"},
@@ -41,7 +41,7 @@ func TestTrackingSettingsExposeBBTAndCervicalMucusOnDashboard(t *testing.T) {
 func TestSettingsPageKeepsPersistedCycleValuesAfterRecoveryCodeRegeneration(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-recovery-return@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/regenerate-recovery-code", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/recovery-code", url.Values{
 		"password": {"StrongPass1"},
 	}, nil)
 	assertStatusCode(t, response, http.StatusSeeOther)
@@ -99,7 +99,7 @@ func TestSettingsPageKeepsPersistedCycleValuesAfterRecoveryCodeRegeneration(t *t
 func TestTrackingSettingsHideSensitiveSectionsOnDashboardAndCalendar(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-tracking-privacy@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/tracking", url.Values{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPatch, "/api/v1/users/current/tracking", url.Values{
 		"hide_sex_chip":      {"true"},
 		"hide_cycle_factors": {"true"},
 		"hide_notes_field":   {"true"},

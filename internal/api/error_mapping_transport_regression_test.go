@@ -81,7 +81,7 @@ func TestRespondMappedErrorSettingsFormRedirectsWithFlashOnly(t *testing.T) {
 
 	app, handler := newErrorMappingTransportTestApp(t)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader("display_name="))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader("display_name="))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	response := mustAppResponse(t, app, request)
@@ -120,7 +120,7 @@ func newErrorMappingTransportTestApp(t *testing.T) (*fiber.App, *Handler) {
 	app.Post("/api/v1/users", func(c *fiber.Ctx) error {
 		return handler.respondMappedError(c, authFormErrorSpec(fiber.StatusBadRequest, APIErrorCategoryValidation, "weak password"))
 	})
-	app.Post("/api/settings/profile", func(c *fiber.Ctx) error {
+	app.Patch("/api/v1/users/current/profile", func(c *fiber.Ctx) error {
 		return handler.respondMappedError(c, settingsFormErrorSpec(fiber.StatusBadRequest, APIErrorCategoryValidation, "invalid settings input"))
 	})
 

@@ -79,7 +79,7 @@ Yes. Ovumcy supports CSV and JSON export so your records stay portable. See [doc
 
 ### Is there an HTTP API specification?
 
-Yes. The JSON surface served at `/api/*` (and the state-changing routes that historically live outside `/api/*`) is described in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1). It documents what the server emits today; it is not a stable third-party API — see [CONTRIBUTING.md](CONTRIBUTING.md) for the stability contract.
+Yes. The canonical JSON surface lives at `/api/v1/*` and is described in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1). `/api/v1/*` is the stable contract for external clients and wrappers — see [CONTRIBUTING.md](CONTRIBUTING.md) for the API Stability Contract. Building a wrapper? Start with `GET /api/v1/users/current` to confirm the session subject, then branch on the documented status code plus `error_detail.category` for error handling.
 
 ### Do I need technical knowledge to install Ovumcy?
 

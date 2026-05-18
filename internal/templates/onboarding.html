@@ -35,7 +35,7 @@
       <p class="journal-muted text-sm">{{t .Messages "onboarding.step1.privacy"}}</p>
 
       <form
-        hx-post="/onboarding/step1"
+        hx-post="/api/v1/onboarding/steps/1"
         hx-target="#onboarding-step1-status"
         hx-swap="innerHTML"
         data-onboarding-form-step="1"
@@ -69,7 +69,7 @@
       <h1 class="journal-title">{{t .Messages "onboarding.step2.title"}}</h1>
 
       <form
-        hx-post="/onboarding/step2"
+        hx-post="/api/v1/onboarding/steps/2"
         hx-target="#onboarding-step2-status"
         hx-swap="innerHTML"
         data-onboarding-form-step="2"

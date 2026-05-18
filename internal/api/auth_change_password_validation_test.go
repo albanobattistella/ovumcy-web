@@ -17,7 +17,7 @@ func TestChangePasswordRejectsWeakNumericPassword(t *testing.T) {
 		"new_password":     {"12345678"},
 		"confirm_password": {"12345678"},
 	}
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", form, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", form, map[string]string{
 		"Accept": "application/json",
 	})
 	defer response.Body.Close()
@@ -51,7 +51,7 @@ func TestChangePasswordRejectsPasswordMismatch(t *testing.T) {
 		"new_password":     {"EvenStronger2"},
 		"confirm_password": {"DifferentPass3"},
 	}
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", form, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", form, map[string]string{
 		"Accept": "application/json",
 	})
 	defer response.Body.Close()

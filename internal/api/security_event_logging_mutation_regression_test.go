@@ -26,7 +26,7 @@ func TestCreateSymptomLogsMutationWithoutLeakingUserInput(t *testing.T) {
 		"icon": {"S"},
 	}
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/symptoms", form, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/v1/symptoms", form, map[string]string{
 		"Accept": "application/json",
 	})
 	defer response.Body.Close()

@@ -17,7 +17,7 @@ func TestProfileUpdateHTMXReturnsUnicodeSafeIdentityOOBMarkup(t *testing.T) {
 	form := url.Values{
 		"display_name": {"Катя"},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Cookie", authCookie)
 	request.Header.Set("HX-Request", "true")
@@ -66,7 +66,7 @@ func TestProfileUpdateHTMXReturnsFallbackIdentityWhenDisplayNameCleared(t *testi
 	seedForm := url.Values{
 		"display_name": {"Maya"},
 	}
-	seedRequest := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader(seedForm.Encode()))
+	seedRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader(seedForm.Encode()))
 	seedRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	seedRequest.Header.Set("Cookie", authCookie)
 	seedRequest.Header.Set("HX-Request", "true")
@@ -83,7 +83,7 @@ func TestProfileUpdateHTMXReturnsFallbackIdentityWhenDisplayNameCleared(t *testi
 	clearForm := url.Values{
 		"display_name": {"   "},
 	}
-	clearRequest := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader(clearForm.Encode()))
+	clearRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader(clearForm.Encode()))
 	clearRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	clearRequest.Header.Set("Cookie", authCookie)
 	clearRequest.Header.Set("HX-Request", "true")

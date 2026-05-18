@@ -47,7 +47,7 @@ func TestExportCSVRespectsRequestedDateRange(t *testing.T) {
 	}
 
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
-	request := newExportRequestForTest(t, "/api/export/csv?from=2026-02-05&to=2026-02-12", authCookie)
+	request := newExportRequestForTest(t, "/api/v1/exports/csv?from=2026-02-05&to=2026-02-12", authCookie)
 
 	response, err := app.Test(request, -1)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestExportCSVIncludesKnownAndOtherSymptoms(t *testing.T) {
 		t.Fatalf("create daily log: %v", err)
 	}
 
-	response := exportResponseForTest(t, app, user.Email, "StrongPass1", "/api/export/csv")
+	response := exportResponseForTest(t, app, user.Email, "StrongPass1", "/api/v1/exports/csv")
 	assertBodyContainsAll(t, response.Header.Get("Content-Type"),
 		bodyStringMatch{fragment: "text/csv", message: "expected text/csv content type"},
 	)
@@ -210,7 +210,7 @@ func TestExportJSONNormalizesFlowAndMapsSymptoms(t *testing.T) {
 		t.Fatalf("create daily log: %v", err)
 	}
 
-	response := exportResponseForTest(t, app, user.Email, "StrongPass1", "/api/export/json")
+	response := exportResponseForTest(t, app, user.Email, "StrongPass1", "/api/v1/exports/json")
 	assertBodyContainsAll(t, response.Header.Get("Content-Type"),
 		bodyStringMatch{fragment: "application/json", message: "expected application/json content type"},
 	)
@@ -335,7 +335,7 @@ func TestExportSummaryRespectsRequestedDateRange(t *testing.T) {
 	}
 
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
-	request := newExportRequestForTest(t, "/api/export/summary?from=2026-02-10&to=2026-02-19", authCookie)
+	request := newExportRequestForTest(t, "/api/v1/exports/summary?from=2026-02-10&to=2026-02-19", authCookie)
 
 	response, err := app.Test(request, -1)
 	if err != nil {
@@ -383,7 +383,7 @@ func TestExportSummaryRejectsInvalidDateRange(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "export-summary-invalid-range@example.com", "StrongPass1", true)
 
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
-	request := newExportRequestForTest(t, "/api/export/summary?from=2026-02-20&to=2026-02-10", authCookie)
+	request := newExportRequestForTest(t, "/api/v1/exports/summary?from=2026-02-20&to=2026-02-10", authCookie)
 
 	response, err := app.Test(request, -1)
 	if err != nil {
@@ -430,7 +430,7 @@ func TestExportSummaryUsesRequestTimezoneForRangeParsing(t *testing.T) {
 	}
 
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
-	request := newExportRequestForTest(t, "/api/export/summary?from=2026-03-13&to=2026-03-13", joinCookieHeader(authCookie, timezoneCookieName+"=Pacific/Kiritimati"))
+	request := newExportRequestForTest(t, "/api/v1/exports/summary?from=2026-03-13&to=2026-03-13", joinCookieHeader(authCookie, timezoneCookieName+"=Pacific/Kiritimati"))
 	request.Header.Set(timezoneHeaderName, "Pacific/Kiritimati")
 
 	response, err := app.Test(request, -1)

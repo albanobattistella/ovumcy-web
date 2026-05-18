@@ -42,7 +42,7 @@ func TestSettingsCycleJSONContentTypeWithoutAcceptReturnsJSONError(t *testing.T)
 	user := createOnboardingTestUser(t, database, "transport-settings-cycle@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/settings/cycle", bytes.NewBufferString(`{"cycle_length":`))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/cycle", bytes.NewBufferString(`{"cycle_length":`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Cookie", authCookie)
 

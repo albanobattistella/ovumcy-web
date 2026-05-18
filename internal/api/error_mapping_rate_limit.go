@@ -31,7 +31,7 @@ func (handler *Handler) RespondAPIRateLimited(c *fiber.Ctx) error {
 	switch {
 	case isV1AuthFormPath(c.Path()):
 		return handler.respondRateLimitedMappedError(c, authRateLimitErrorSpec("too many requests"))
-	case strings.HasPrefix(c.Path(), "/api/settings/"), strings.HasPrefix(c.Path(), "/settings/"):
+	case strings.HasPrefix(c.Path(), "/api/v1/users/current"):
 		return handler.respondRateLimitedMappedError(c, settingsRateLimitErrorSpec())
 	default:
 		return handler.respondRateLimitedMappedError(c, globalRateLimitErrorSpec())

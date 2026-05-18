@@ -11,7 +11,7 @@ import (
 )
 
 // TestClearAllData_BumpsSessionVersion captures the contract that a
-// successful POST /api/settings/clear-data invalidates every auth cookie
+// successful POST /api/v1/users/current/data-wipe invalidates every auth cookie
 // issued before the wipe. The originating device is refreshed inline so
 // the user that triggered the clear-data flow stays signed in, while a
 // session that existed on a different device (whose cookie was issued
@@ -23,7 +23,7 @@ func TestClearAllData_BumpsSessionVersion(t *testing.T) {
 	preWipeVersion := ctx.user.AuthSessionVersion
 
 	form := url.Values{"password": {"StrongPass1"}}
-	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/clear-data", form, map[string]string{"Accept": "application/json"})
+	resp := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/data-wipe", form, map[string]string{"Accept": "application/json"})
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("clear-data status = %d, want 200 or 303", resp.StatusCode)

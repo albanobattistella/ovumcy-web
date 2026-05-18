@@ -40,7 +40,7 @@ func TestDeleteSymptomArchivesAndKeepsIDsInLogs(t *testing.T) {
 		t.Fatalf("create daily log: %v", err)
 	}
 
-	request := httptest.NewRequest(http.MethodDelete, "/api/symptoms/"+strconv.FormatUint(uint64(symptom.ID), 10), nil)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/symptoms/"+strconv.FormatUint(uint64(symptom.ID), 10), nil)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
 

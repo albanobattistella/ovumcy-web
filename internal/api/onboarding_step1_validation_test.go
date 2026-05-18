@@ -19,7 +19,7 @@ func TestOnboardingStep1RejectsFutureAndTooOldDates(t *testing.T) {
 	futureForm := url.Values{
 		"last_period_start": {futureDate},
 	}
-	futureRequest := httptest.NewRequest(http.MethodPost, "/onboarding/step1", strings.NewReader(futureForm.Encode()))
+	futureRequest := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/1", strings.NewReader(futureForm.Encode()))
 	futureRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	futureRequest.Header.Set("HX-Request", "true")
 	futureRequest.Header.Set("Cookie", authCookie)
@@ -37,7 +37,7 @@ func TestOnboardingStep1RejectsFutureAndTooOldDates(t *testing.T) {
 	oldForm := url.Values{
 		"last_period_start": {oldDate},
 	}
-	oldRequest := httptest.NewRequest(http.MethodPost, "/onboarding/step1", strings.NewReader(oldForm.Encode()))
+	oldRequest := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/1", strings.NewReader(oldForm.Encode()))
 	oldRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	oldRequest.Header.Set("HX-Request", "true")
 	oldRequest.Header.Set("Cookie", authCookie)
@@ -62,7 +62,7 @@ func TestOnboardingStep1IgnoresUnexpectedPeriodEndInput(t *testing.T) {
 		"last_period_start": {stepDate.Format("2006-01-02")},
 		"period_end":        {stepDate.Format("2006-01-02")},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step1", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/1", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", authCookie)
@@ -95,7 +95,7 @@ func TestOnboardingStep1RejectsFarHistoricalDate(t *testing.T) {
 	form := url.Values{
 		"last_period_start": {"2024-01-01"},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step1", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/1", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", authCookie)

@@ -14,9 +14,9 @@
     </div>
 
     <form
-      action="/api/settings/2fa/disable"
+      action="/api/v1/users/current/2fa"
       method="post"
-      hx-post="/api/settings/2fa/disable"
+      hx-delete="/api/v1/users/current/2fa"
       hx-target="#settings-2fa-status"
       hx-swap="innerHTML"
       class="space-y-4">
@@ -69,9 +69,9 @@
     </div>
 
     <form
-      action="/api/settings/2fa/verify"
+      action="/api/v1/users/current/2fa"
       method="post"
-      hx-post="/api/settings/2fa/verify"
+      hx-put="/api/v1/users/current/2fa"
       hx-target="#settings-2fa-verify-status"
       hx-swap="innerHTML"
       class="space-y-4">

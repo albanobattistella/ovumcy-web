@@ -94,7 +94,7 @@ func (handler *Handler) respondSettingsError(c *fiber.Ctx, spec APIErrorSpec) er
 		}
 		return c.Status(fiber.StatusOK).SendString(httpx.StatusErrorMarkup(rendered))
 	}
-	if (strings.HasPrefix(c.Path(), "/api/settings/") || strings.HasPrefix(c.Path(), "/settings/")) && !acceptsJSON(c) {
+	if strings.HasPrefix(c.Path(), "/api/v1/users/current") && !acceptsJSON(c) {
 		handler.setFlashCookie(c, FlashPayload{SettingsError: spec.Key})
 		return c.Redirect("/settings", fiber.StatusSeeOther)
 	}

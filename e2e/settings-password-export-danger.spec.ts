@@ -125,8 +125,8 @@ test.describe('Settings: password, export, clear data, delete account', () => {
 
     const forms = [
       page.locator('#settings-change-password-form'),
-      page.locator('form[action="/api/settings/clear-data"]'),
-      page.locator('form[hx-delete="/api/settings/delete-account"]'),
+      page.locator('form[action="/api/v1/users/current/data-wipe"]'),
+      page.locator('form[hx-delete="/api/v1/users/current"]'),
     ];
 
     for (const form of forms) {
@@ -145,7 +145,7 @@ test.describe('Settings: password, export, clear data, delete account', () => {
     await page.locator('#settings-current-password').fill(creds.password);
     await page.locator('#settings-new-password').fill(newPassword);
     await page.locator('#settings-confirm-password').fill(newPassword);
-    await requestSubmitForm(page.locator('form[action="/api/settings/change-password"]'));
+    await requestSubmitForm(page.locator('form[action="/api/v1/users/current/password"]'));
 
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.locator('#settings-change-password-status .status-ok').first()).toBeVisible();
@@ -166,13 +166,13 @@ test.describe('Settings: password, export, clear data, delete account', () => {
     page.on('request', (request) => {
       if (
         request.method() === 'POST' &&
-        request.url().includes('/api/settings/change-password')
+        request.url().includes('/api/v1/users/current/password')
       ) {
         passwordRequests += 1;
       }
     });
 
-    const changePasswordForm = page.locator('form[action="/api/settings/change-password"]');
+    const changePasswordForm = page.locator('form[action="/api/v1/users/current/password"]');
     const checklist = page.locator('#settings-change-password-form [data-password-guidance]');
 
     await expect(checklist.locator('[data-password-rule-item="length"]')).toHaveAttribute(
@@ -233,7 +233,7 @@ test.describe('Settings: password, export, clear data, delete account', () => {
     page,
   }) => {
     const state = await registerOwnerAndOpenSettings(page, 'settings-recovery-regenerate');
-    const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+    const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
 
     await expect(cycleForm).toBeVisible();
     await setRangeValue(page.locator('#settings-cycle-length'), 29);
@@ -243,10 +243,10 @@ test.describe('Settings: password, export, clear data, delete account', () => {
     await expect(page.locator('#settings-cycle-status .status-ok')).toBeVisible();
 
     await page
-      .locator('form[action="/api/settings/regenerate-recovery-code"] #settings-recovery-code-password')
+      .locator('form[action="/api/v1/users/current/recovery-code"] #settings-recovery-code-password')
       .fill(state.password);
     await page
-      .locator('form[action="/api/settings/regenerate-recovery-code"] button[type="submit"]')
+      .locator('form[action="/api/v1/users/current/recovery-code"] button[type="submit"]')
       .click();
     await expect(page.locator('#confirm-modal')).toBeVisible();
     await page.locator('#confirm-modal-accept').click();
@@ -278,7 +278,7 @@ test.describe('Settings: password, export, clear data, delete account', () => {
     await expect(page).toHaveURL(/\/settings$/);
     const csrfToken = await readCSRFToken(page);
 
-    const csvResponse = await page.request.post('/api/export/csv', {
+    const csvResponse = await page.request.get('/api/v1/exports/csv', {
       form: { csrf_token: csrfToken },
     });
 
@@ -287,7 +287,7 @@ test.describe('Settings: password, export, clear data, delete account', () => {
     expect(csvResponse.headers()['content-disposition'] || '').toContain('attachment;');
     expect(await csvResponse.text()).toContain(exportNote);
 
-    const jsonResponse = await page.request.post('/api/export/json', {
+    const jsonResponse = await page.request.get('/api/v1/exports/json', {
       form: { csrf_token: csrfToken },
     });
 
@@ -400,15 +400,15 @@ test.describe('Settings: password, export, clear data, delete account', () => {
     const creds = await registerOwnerAndOpenSettings(page, 'settings-clear-data');
 
     const dangerZone = page.locator('section.settings-danger-zone');
-    await expect(dangerZone.locator('form[action="/api/settings/clear-data"]')).toHaveCount(1);
-    await expect(page.locator('#settings-data form[action="/api/settings/clear-data"]')).toHaveCount(0);
+    await expect(dangerZone.locator('form[action="/api/v1/users/current/data-wipe"]')).toHaveCount(1);
+    await expect(page.locator('#settings-data form[action="/api/v1/users/current/data-wipe"]')).toHaveCount(0);
 
     await setRangeValue(page.locator('#settings-cycle-length'), 35);
     await setRangeValue(page.locator('#settings-period-length'), 7);
     await fillDateField(page.locator('#settings-last-period-start'), isoDaysAgo(12));
     await page.locator('section#settings-cycle input[name="auto_period_fill"]').uncheck();
     await page
-      .locator('section#settings-cycle form[action="/settings/cycle"] button[data-save-button]')
+      .locator('section#settings-cycle form[action="/api/v1/users/current/cycle"] button[data-save-button]')
       .click();
     await expect(page.locator('#settings-cycle-status .status-ok')).toBeVisible();
 
@@ -425,12 +425,12 @@ test.describe('Settings: password, export, clear data, delete account', () => {
     await expect(symptomSection).not.toContainText('Built-in symptoms always stay available.');
 
     await dangerZone.locator('#settings-clear-data-password').fill('WrongPass1');
-    await dangerZone.locator('form[action="/api/settings/clear-data"] button[type="submit"]').click();
+    await dangerZone.locator('form[action="/api/v1/users/current/data-wipe"] button[type="submit"]').click();
     await expect(page.locator('#confirm-modal')).toBeHidden();
     await expect(page.locator('#settings-clear-data-status .status-error')).toBeVisible();
 
     await dangerZone.locator('#settings-clear-data-password').fill(creds.password);
-    await dangerZone.locator('form[action="/api/settings/clear-data"] button[type="submit"]').click();
+    await dangerZone.locator('form[action="/api/v1/users/current/data-wipe"] button[type="submit"]').click();
     await expect(page.locator('#confirm-modal')).toBeVisible();
     await page.locator('#confirm-modal-accept').click();
 
@@ -457,7 +457,7 @@ test.describe('Settings: password, export, clear data, delete account', () => {
   test('delete account requires valid password and removes account on success', async ({ page }) => {
     const creds = await registerOwnerAndOpenSettings(page, 'settings-delete-account');
 
-    const deleteForm = page.locator('form[hx-delete="/api/settings/delete-account"]');
+    const deleteForm = page.locator('form[hx-delete="/api/v1/users/current"]');
 
     await deleteForm.locator('#settings-delete-password').fill('WrongPass1');
     await deleteForm.locator('button[type="submit"]').click();

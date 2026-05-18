@@ -27,9 +27,9 @@ A few information-disclosure signals are accepted residual risk because closing 
 
 ### Register enumeration: pickup-cookie follow-up oracle (residual)
 
-`POST /api/auth/register` returns identical status, body, and Set-Cookie shape (a single sealed `ovumcy_register_pickup` cookie of fixed length, no `ovumcy_auth` or `ovumcy_recovery_code`) for both a brand-new email and a duplicate. Response timing is also equalized: the duplicate-email branch runs `equalizeRegistrationTiming` (two bcrypt-cost-10 comparisons against fixed placeholder hashes) to match the work `BuildOwnerUserWithRecovery` performs on the new-email branch (password hash + recovery-code hash), so the single POST response carries no observable difference. The follow-up `GET /register/welcome` then dispatches the pickup cookie either to `/register` (with auth and recovery cookies) for a valid pickup or to `/login` (with a neutral flash) for a decoy or expired pickup. An attacker who holds their own pickup cookie from a probe POST can therefore observe which redirect target their cookie resolves to and infer whether the email was new or already registered. This turns the single-request status / cookie / timing oracle into a two-request probe, with both endpoints under per-IP rate limiting, and the login bcrypt-timing equalization (`equalizeAuthCredentialsTiming`) further bounding any cross-endpoint follow-up.
+`POST /api/v1/users` returns identical status, body, and Set-Cookie shape (a single sealed `ovumcy_register_pickup` cookie of fixed length, no `ovumcy_auth` or `ovumcy_recovery_code`) for both a brand-new email and a duplicate. Response timing is also equalized: the duplicate-email branch runs `equalizeRegistrationTiming` (two bcrypt-cost-10 comparisons against fixed placeholder hashes) to match the work `BuildOwnerUserWithRecovery` performs on the new-email branch (password hash + recovery-code hash), so the single POST response carries no observable difference. The follow-up `GET /register/welcome` then dispatches the pickup cookie either to `/register` (with auth and recovery cookies) for a valid pickup or to `/login` (with a neutral flash) for a decoy or expired pickup. An attacker who holds their own pickup cookie from a probe POST can therefore observe which redirect target their cookie resolves to and infer whether the email was new or already registered. This turns the single-request status / cookie / timing oracle into a two-request probe, with both endpoints under per-IP rate limiting, and the login bcrypt-timing equalization (`equalizeAuthCredentialsTiming`) further bounding any cross-endpoint follow-up.
 
-Closing the residual signal entirely is mathematically impossible without an out-of-band verification channel: any in-app dispatch on the pickup cookie reveals the branch, and any login-after-register variant turns the probe into a follow-up POST `/api/auth/login` whose success or failure carries the same information. The only options are (a) a magic-link / email-driven enrollment that gates registration behind SMTP delivery (not assumed in the self-hosted deployment model), or (b) acceptance of the documented two-request probe. Both are revisited if Ovumcy ever ships a multi-tenant SaaS variant.
+Closing the residual signal entirely is mathematically impossible without an out-of-band verification channel: any in-app dispatch on the pickup cookie reveals the branch, and any login-after-register variant turns the probe into a follow-up `POST /api/v1/sessions` whose success or failure carries the same information. The only options are (a) a magic-link / email-driven enrollment that gates registration behind SMTP delivery (not assumed in the self-hosted deployment model), or (b) acceptance of the documented two-request probe. Both are revisited if Ovumcy ever ships a multi-tenant SaaS variant.
 
 A separate vector — replay of a sealed `ovumcy_register_pickup` cookie captured from somebody else's response within the 5-minute TTL — is **not** part of this residual. The pickup cookie carries an opaque nonce that is consumed atomically through `register_pickup_tokens` on the first `GET /register/welcome` call; a captured cookie reaching the welcome endpoint a second time gets the same neutral `/login` redirect as a decoy or expired pickup, and cannot mint a second `ovumcy_auth` session.
 
@@ -41,7 +41,7 @@ A legacy decrypt path exists for ciphertexts written by Ovumcy versions before a
 
 ### Login: `requires_totp` reveals 2FA status
 
-`POST /api/auth/login` returns `{"requires_totp": true}` when the supplied password is correct and the account has TOTP enabled, and `{"ok": true}` plus a session cookie otherwise. A credential-dump attacker can use this to triage accounts by whether they have a second factor.
+`POST /api/v1/sessions` returns `{"requires_totp": true}` when the supplied password is correct and the account has TOTP enabled, and `{"ok": true}` plus a session cookie otherwise. A credential-dump attacker can use this to triage accounts by whether they have a second factor.
 
 This is inherent to any password-then-TOTP flow that gates the second factor on account state — any uniform response that hides the difference either silently grants access without verifying TOTP (downgrade attack) or unconditionally rejects accounts without TOTP (lockout). The per-account rate limiter (`AuthAttemptPolicy`) and the recovery-code re-auth requirements bound the value of knowing the 2FA status.
 
@@ -49,11 +49,11 @@ This is inherent to any password-then-TOTP flow that gates the second factor on 
 
 Operations that rotate a long-lived credential bump `users.auth_session_version` in the same database update, immediately invalidating every active `ovumcy_auth` cookie for that account. This applies to:
 
-- Password change (`POST /api/settings/change-password`).
-- Password reset via recovery code (`POST /api/auth/reset-password`).
-- Recovery-code regeneration (`POST /api/settings/regenerate-recovery-code`) — the current request receives a freshly issued cookie so the originating session stays alive, but every other device is signed out.
+- Password change (`PUT /api/v1/users/current/password`).
+- Password reset via recovery code (`POST /api/v1/password-resets/redeem`).
+- Recovery-code regeneration (`POST /api/v1/users/current/recovery-code`) — the current request receives a freshly issued cookie so the originating session stays alive, but every other device is signed out.
 - Forced password reset via the `ovumcy reset-password` operator command.
-- TOTP 2FA enable (`POST /api/settings/2fa/verify`) and disable (`POST /api/settings/2fa/disable`) — toggling the second factor is also a change to the account's auth posture, so any cookie issued before the toggle is invalidated. The originating device receives a freshly issued cookie inline; every other device is signed out.
+- TOTP 2FA enable (`PUT /api/v1/users/current/2fa`) and disable (`DELETE /api/v1/users/current/2fa`) — toggling the second factor is also a change to the account's auth posture, so any cookie issued before the toggle is invalidated. The originating device receives a freshly issued cookie inline; every other device is signed out.
 
 If you suspect a session compromise, regenerating the recovery code is the fastest way to force every other device to re-authenticate without changing your password.
 
@@ -114,7 +114,7 @@ What Ovumcy persists per account and per record. All storage is in the operator'
 
 ## Retention and Deletion
 
-**`POST /api/settings/clear-data`** (`Settings → Clear data`) wipes per-account health data while keeping the account active:
+**`POST /api/v1/users/current/data-wipe`** (`Settings → Clear data`) wipes per-account health data while keeping the account active:
 
 - Deletes every `daily_logs` row for the user.
 - Deletes every user-defined row in `symptom_types` (built-in symptoms remain).
@@ -123,7 +123,7 @@ What Ovumcy persists per account and per record. All storage is in the operator'
 
 `clear-data` does **not** touch email, password hash, recovery code hash, role, display name, OIDC identity links, TOTP state, or onboarding status.
 
-**`DELETE /api/settings/delete-account`** removes the account entirely:
+**`DELETE /api/v1/users/current`** removes the account entirely:
 
 - Deletes every `daily_logs` row for the user.
 - Deletes every `symptom_types` row for the user (including built-ins).
@@ -164,10 +164,10 @@ Per-IP HTTP rate limits enforced by Fiber's limiter middleware. Defaults are tun
 
 | Endpoint | Default budget | Env override |
 | --- | --- | --- |
-| `POST /api/auth/login` | 8 requests / 15 minutes | `RATE_LIMIT_LOGIN_MAX`, `RATE_LIMIT_LOGIN_WINDOW` |
-| `POST /api/auth/register` | 8 requests / 15 minutes | `RATE_LIMIT_REGISTER_MAX`, `RATE_LIMIT_REGISTER_WINDOW` |
-| `POST /api/auth/forgot-password` | 8 requests / 1 hour | `RATE_LIMIT_FORGOT_PASSWORD_MAX`, `RATE_LIMIT_FORGOT_PASSWORD_WINDOW` |
-| `POST /api/auth/logout` | 60 requests / 15 minutes | `RATE_LIMIT_LOGOUT_MAX`, `RATE_LIMIT_LOGOUT_WINDOW` |
+| `POST /api/v1/sessions` | 8 requests / 15 minutes | `RATE_LIMIT_LOGIN_MAX`, `RATE_LIMIT_LOGIN_WINDOW` |
+| `POST /api/v1/users` | 8 requests / 15 minutes | `RATE_LIMIT_REGISTER_MAX`, `RATE_LIMIT_REGISTER_WINDOW` |
+| `POST /api/v1/password-resets` | 8 requests / 1 hour | `RATE_LIMIT_FORGOT_PASSWORD_MAX`, `RATE_LIMIT_FORGOT_PASSWORD_WINDOW` |
+| `DELETE /api/v1/sessions/current` | 60 requests / 15 minutes | `RATE_LIMIT_LOGOUT_MAX`, `RATE_LIMIT_LOGOUT_WINDOW` |
 | `/api/*` (catch-all) | 300 requests / 1 minute | `RATE_LIMIT_API_MAX`, `RATE_LIMIT_API_WINDOW` |
 
 Plus per-account, identity-keyed budgets enforced by `AuthAttemptPolicy` (`internal/services/auth_attempt_policy.go`):
@@ -203,7 +203,7 @@ Plan secret rotation as planned maintenance, communicate it in advance, and cons
 
 **In scope** — Ovumcy actively defends against:
 
-- Credential stuffing and bot enumeration against `/api/auth/*` (rate limits, sealed pickup, bcrypt-timing equalization).
+- Credential stuffing and bot enumeration against `/api/v1/sessions`, `/api/v1/users`, and `/api/v1/password-resets` (rate limits, sealed pickup, bcrypt-timing equalization).
 - Replay of captured sealed cookies (server-side single-use for register pickup; session-version checks for `ovumcy_auth`).
 - DOM-XSS into HTMX error responses (status-error fragment is parsed with `DOMParser` and rebuilt via `document.createElement` + `textContent`, never `innerHTML`).
 - Cross-site form submission (CSRF middleware on every state-changing endpoint; OIDC callback uses provider-issued `state`/`nonce` instead).
@@ -231,7 +231,7 @@ Ovumcy does **not** emit per-action audit logs by default. The `AUDIT_LOG_ENABLE
 
   ```
   security event: action="health.day_upsert" outcome="success" method="POST"
-                  path="/api/days/:date" format="json" user_id="42"
+                  path="/api/v1/days/:date" format="json" user_id="42"
                   role="owner" domain="health_data" target="day_entry"
   ```
 
@@ -265,7 +265,7 @@ Policy-level claims (threat model in/out-of-scope, design rationale, marketing-s
 
 | Claim | Enforced by |
 | --- | --- |
-| `POST /api/auth/register` emits an identical-shape sealed pickup cookie for new and duplicate emails | `auth_register_regressions_test.go`, `auth_register_email_persistence_regressions_test.go` in `internal/api/` |
+| `POST /api/v1/users` emits an identical-shape sealed pickup cookie for new and duplicate emails | `auth_register_regressions_test.go`, `auth_register_email_persistence_regressions_test.go` in `internal/api/` |
 | Duplicate-email branch runs equalized bcrypt timing | `TestAuthenticateCredentialsEqualizesTimingForMissingUser`, `TestAuthenticateCredentialsEqualizesTimingForDisabledLocalAuth` in [internal/services/auth_service_credentials_timing_test.go](internal/services/auth_service_credentials_timing_test.go) |
 | Pickup nonce is single-use via `register_pickup_tokens` (atomic UPDATE) | `register_pickup_handler_test.go` in `internal/api/` |
 | `GET /register/welcome` second consumption falls through to `/login` | `register_pickup_handler_test.go` in `internal/api/` |
@@ -360,7 +360,7 @@ Policy-level claims (threat model in/out-of-scope, design rationale, marketing-s
 | `AUDIT_LOG_ENABLED=false` (default) emits no `security event:` lines | `TestAuditLogDefaultOffSuppressesSecurityEvents` in [internal/api/security_event_logging_audit_flag_test.go](internal/api/security_event_logging_audit_flag_test.go) |
 | `AUDIT_LOG_ENABLED=true` emits security-event lines | `TestAuditLogEnabledRestoresSecurityEvents` in [internal/api/security_event_logging_audit_flag_test.go](internal/api/security_event_logging_audit_flag_test.go) |
 | `AuditLogEnabled()` getter reflects `SetAuditLogEnabled()` writes | `TestAuditLogEnabledReporter` in [internal/api/security_event_logging_audit_flag_test.go](internal/api/security_event_logging_audit_flag_test.go) |
-| When enabled, day-write logs the sanitized path `/api/days/:date` (no concrete date) | `TestUpsertDayLogsSanitizedPathWithoutConcreteDate` in [internal/api/security_event_logging_mutation_regression_test.go](internal/api/security_event_logging_mutation_regression_test.go) |
+| When enabled, day-write logs the sanitized path `/api/v1/days/:date` (no concrete date) | `TestUpsertDayLogsSanitizedPathWithoutConcreteDate` in [internal/api/security_event_logging_mutation_regression_test.go](internal/api/security_event_logging_mutation_regression_test.go) |
 | When enabled, symptom mutation log does not leak the user-supplied symptom name | `TestCreateSymptomLogsMutationWithoutLeakingUserInput` in [internal/api/security_event_logging_mutation_regression_test.go](internal/api/security_event_logging_mutation_regression_test.go) |
 | CSRF middleware error path does not leak PII into the audit log | `TestCSRFMiddlewareErrorHandlerLogsSecurityEventWithoutPII` in [cmd/ovumcy/main_test.go](cmd/ovumcy/main_test.go) |
 | Rate-limit handler does not leak PII into the audit log | `TestAuthRateLimitHandlerLogsSecurityEventWithoutPII` in [cmd/ovumcy/main_test.go](cmd/ovumcy/main_test.go) |

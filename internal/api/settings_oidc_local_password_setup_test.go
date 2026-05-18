@@ -100,7 +100,7 @@ func (fixture *oidcStepupFixture) postStart(t *testing.T, newPassword, confirmPa
 		"confirm_password": {confirmPassword},
 		"csrf_token":       {csrfToken},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/start-local-password-setup", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/users/current/password/step-up", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", settingsCookieHeader(fixture.authCookie, csrfCookie))

@@ -183,9 +183,9 @@ async function completeOnboardingWithStartDate(page: Page, startDate: string): P
     await fillDateField(startDateInput, startDate);
   }
 
-  await page.locator('form[hx-post="/onboarding/step1"] button[type="submit"]').click();
+  await page.locator('form[hx-post="/api/v1/onboarding/steps/1"] button[type="submit"]').click();
 
-  const stepTwoForm = page.locator('form[hx-post="/onboarding/step2"]');
+  const stepTwoForm = page.locator('form[hx-post="/api/v1/onboarding/steps/2"]');
   await expect(stepTwoForm).toBeVisible();
   await stepTwoForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(/\/dashboard(?:\?.*)?$/);
@@ -206,7 +206,7 @@ test.describe('Settings: profile and cycle', () => {
     const displayNameInput = page.locator('#settings-display-name');
     await expect(displayNameInput).toHaveAttribute('maxlength', '64');
     const saveProfileButton = page.locator(
-      'form[action="/api/settings/profile"] button[data-save-button]'
+      'form[action="/api/v1/users/current/profile"] button[data-save-button]'
     );
 
     const newName = `Profile-${Date.now()}-ABCDEFGHIJKLMNOPQRSTUVWXYZ-1234567890`.slice(0, 64);
@@ -272,7 +272,7 @@ test.describe('Settings: profile and cycle', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings$/);
 
-    const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+    const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
     await expect(cycleForm).toBeVisible();
 
     const cycleLength = cycleForm.locator('#settings-cycle-length');
@@ -314,7 +314,7 @@ test.describe('Settings: profile and cycle', () => {
 
     await fillDateField(page.locator('#settings-last-period-start'), isoDaysFromNow(1));
     await page
-      .locator('section#settings-cycle form[action="/settings/cycle"] button[data-save-button]')
+      .locator('section#settings-cycle form[action="/api/v1/users/current/cycle"] button[data-save-button]')
       .click();
 
     await expect(page.locator('#settings-cycle-status .status-error')).toBeVisible();
@@ -323,7 +323,7 @@ test.describe('Settings: profile and cycle', () => {
   test('irregular cycle toggle switches dashboard prediction to a date range', async ({ page }) => {
     await registerOwnerAndOpenSettings(page, 'settings-irregular-cycle');
 
-    const cycleForm = page.locator('section#settings-cycle form[action="/settings/cycle"]');
+    const cycleForm = page.locator('section#settings-cycle form[action="/api/v1/users/current/cycle"]');
     await expect(cycleForm).toBeVisible();
 
     const irregularToggle = cycleForm.locator('input[name="irregular_cycle"]');

@@ -113,7 +113,7 @@ func TestAuthMiddlewareRejectsRevokedAuthSessionCookieForAPI(t *testing.T) {
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 	forceResetPasswordHash(t, database, user.ID, "EvenStronger2")
 
-	request := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/stats/overview", nil)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
 

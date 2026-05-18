@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var SUMMARY_ENDPOINT = "/api/export/summary";
+  var SUMMARY_ENDPOINT = "/api/v1/exports/summary";
   var SUMMARY_REFRESH_DELAY_MS = 160;
   var DOWNLOAD_REVOKE_DELAY_MS = 500;
   var CALENDAR_MIN_YEAR = 1900;
@@ -158,10 +158,6 @@
 
   function buildExportRequestBody(fromValue, toValue) {
     var payload = new URLSearchParams();
-    var csrfToken = readCSRFToken();
-    if (csrfToken) {
-      payload.set("csrf_token", csrfToken);
-    }
     if (fromValue) {
       payload.set("from", fromValue);
     }

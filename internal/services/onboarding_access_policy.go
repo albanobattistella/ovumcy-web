@@ -4,7 +4,10 @@ import "strings"
 
 func IsOnboardingPath(path string) bool {
 	cleanPath := strings.TrimSpace(path)
-	return cleanPath == "/onboarding" || strings.HasPrefix(cleanPath, "/onboarding/")
+	if cleanPath == "/onboarding" {
+		return true
+	}
+	return strings.HasPrefix(cleanPath, "/api/v1/onboarding/")
 }
 
 func ShouldEnforceOnboardingAccess(path string) bool {

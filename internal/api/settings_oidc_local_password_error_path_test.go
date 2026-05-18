@@ -49,7 +49,7 @@ func TestOIDCStartLocalPasswordSetupRejectsLocalAuthAlreadyEnabled(t *testing.T)
 		"confirm_password": {"EvenStronger2"},
 		"csrf_token":       {csrfToken},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/start-local-password-setup", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/users/current/password/step-up", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Cookie", settingsCookieHeader(authCookie, csrfCookie))
@@ -94,7 +94,7 @@ func TestOIDCStartLocalPasswordSetupOIDCServiceDisabled(t *testing.T) {
 		"confirm_password": {"EvenStronger2"},
 		"csrf_token":       {csrfToken},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/start-local-password-setup", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/users/current/password/step-up", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Cookie", settingsCookieHeader(authCookie, csrfCookie))

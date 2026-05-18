@@ -19,9 +19,9 @@
     <h2 class="journal-subtitle">🗓️ {{t .Messages "settings.cycle.title"}}</h2>
 
     <form
-      action="/settings/cycle"
+      action="/api/v1/users/current/cycle"
       method="post"
-      hx-post="/settings/cycle"
+      hx-patch="/api/v1/users/current/cycle"
       hx-target="#settings-cycle-status"
       hx-swap="innerHTML"
       class="mt-5 space-y-6"
@@ -185,9 +185,9 @@
     </div>
 
     <form
-      action="/api/settings/tracking"
+      action="/api/v1/users/current/tracking"
       method="post"
-      hx-post="/api/settings/tracking"
+      hx-patch="/api/v1/users/current/tracking"
       hx-target="#settings-tracking-status"
       hx-swap="innerHTML"
       class="space-y-4"
@@ -343,8 +343,9 @@
     </div>
 
     <form
-      action="/api/settings/interface"
+      action="/api/v1/users/current/interface"
       method="post"
+      hx-patch="/api/v1/users/current/interface"
       class="space-y-5"
       data-settings-draft-form="interface"
       data-settings-interface-form
@@ -414,9 +415,9 @@
         </div>
 
         <form
-          action="/api/settings/profile"
+          action="/api/v1/users/current/profile"
           method="post"
-          hx-post="/api/settings/profile"
+          hx-patch="/api/v1/users/current/profile"
           hx-target="#settings-profile-status"
           hx-swap="innerHTML"
           class="space-y-4"
@@ -456,9 +457,9 @@
 
         <form
           id="settings-change-password-form"
-          action="/api/settings/change-password"
+          action="/api/v1/users/current/password"
           method="post"
-          hx-post="/api/settings/change-password"
+          hx-put="/api/v1/users/current/password"
           hx-target="#settings-change-password-status"
           hx-swap="innerHTML"
           class="space-y-4"
@@ -508,7 +509,7 @@
 
         <form
           id="settings-change-password-form"
-          action="/api/settings/start-local-password-setup"
+          action="/api/v1/users/current/password/step-up"
           method="post"
           class="space-y-4"
           data-settings-local-password-form
@@ -574,7 +575,7 @@
 
         {{if .CurrentUser.LocalAuthEnabled}}
         <form
-          action="/api/settings/regenerate-recovery-code"
+          action="/api/v1/users/current/recovery-code"
           method="post"
           class="space-y-4"
           data-confirm="{{t .Messages "settings.confirm_regenerate_recovery_code"}}"
@@ -689,8 +690,8 @@
       </div>
     </div>
     <div class="flex flex-wrap gap-2">
-      <button type="button" data-export-action data-export-endpoint="/api/export/csv" data-export-type="csv" class="btn-secondary inline-flex items-center justify-center"><span class="mr-2" aria-hidden="true">📊</span><span>{{t .Messages "settings.export_csv"}}</span></button>
-      <button type="button" data-export-action data-export-endpoint="/api/export/json" data-export-type="json" class="btn-secondary inline-flex items-center justify-center"><span class="mr-2" aria-hidden="true">🧾</span><span>{{t .Messages "settings.export_json"}}</span></button>
+      <button type="button" data-export-action data-export-endpoint="/api/v1/exports/csv" data-export-type="csv" class="btn-secondary inline-flex items-center justify-center"><span class="mr-2" aria-hidden="true">📊</span><span>{{t .Messages "settings.export_csv"}}</span></button>
+      <button type="button" data-export-action data-export-endpoint="/api/v1/exports/json" data-export-type="json" class="btn-secondary inline-flex items-center justify-center"><span class="mr-2" aria-hidden="true">🧾</span><span>{{t .Messages "settings.export_json"}}</span></button>
     </div>
     <p class="journal-muted text-sm" data-export-summary-total>{{printf (t .Messages "settings.export_summary_total") .ExportTotalEntries}}</p>
     <p class="journal-muted text-sm" data-export-summary-range>
@@ -715,12 +716,12 @@
       </div>
 
       <form
-        action="/api/settings/clear-data"
+        action="/api/v1/users/current/data-wipe"
         method="post"
         class="space-y-4"
         data-clear-data-verify-form
         data-clear-data-status-target="#settings-clear-data-status"
-        data-clear-data-validate-action="/api/settings/clear-data/validate"
+        data-clear-data-validate-action="/api/v1/users/current/data-wipe/validate"
         data-clear-data-confirm-message="{{t .Messages "settings.confirm_clear_data"}}"
         data-clear-data-confirm-accept="{{t .Messages "settings.clear_data.confirm_accept"}}"
         data-clear-data-invalid-password="{{t .Messages "settings.error.invalid_password"}}"
@@ -752,7 +753,7 @@
         <h3 class="field-label">{{t .Messages "settings.delete_account.title"}}</h3>
       </div>
       <form
-        hx-delete="/api/settings/delete-account"
+        hx-delete="/api/v1/users/current"
         hx-target="#delete-account-feedback"
         hx-swap="innerHTML"
         hx-confirm="{{t .Messages "settings.confirm_delete_account"}}"

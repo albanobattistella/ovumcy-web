@@ -5,7 +5,6 @@ import "github.com/gofiber/fiber/v2"
 func RegisterRoutes(app *fiber.App, handler *Handler) {
 	registerPageRoutes(app, handler)
 	registerV1APIRoutes(app, handler)
-	registerAPIRoutes(app, handler)
 }
 
 func registerV1APIRoutes(app *fiber.App, handler *Handler) {
@@ -13,6 +12,26 @@ func registerV1APIRoutes(app *fiber.App, handler *Handler) {
 
 	users := v1.Group("/users")
 	users.Post("", handler.Register)
+
+	usersCurrent := users.Group("/current", handler.AuthRequired)
+	usersCurrent.Get("", handler.GetCurrentUser)
+	usersCurrent.Delete("", handler.OwnerOnly, handler.DeleteAccount)
+	usersCurrent.Patch("/profile", handler.OwnerOnly, handler.UpdateProfile)
+	usersCurrent.Patch("/interface", handler.OwnerOnly, handler.UpdateInterfaceSettings)
+	usersCurrent.Patch("/tracking", handler.OwnerOnly, handler.UpdateTrackingSettings)
+	usersCurrent.Patch("/cycle", handler.OwnerOnly, handler.UpdateCycleSettings)
+	usersCurrent.Put("/password", handler.OwnerOnly, handler.ChangePassword)
+	usersCurrent.Post("/password/step-up", handler.OwnerOnly, handler.StartLocalPasswordSetupReauth)
+	usersCurrent.Post("/recovery-code", handler.OwnerOnly, handler.RegenerateRecoveryCode)
+	usersCurrent.Put("/2fa", handler.OwnerOnly, handler.VerifyTOTP2FAEnrollment)
+	usersCurrent.Delete("/2fa", handler.OwnerOnly, handler.DisableTOTP2FA)
+	usersCurrent.Post("/data-wipe/validate", handler.OwnerOnly, handler.ValidateClearDataPassword)
+	usersCurrent.Post("/data-wipe", handler.OwnerOnly, handler.ClearAllData)
+
+	onboarding := v1.Group("/onboarding", handler.AuthRequired)
+	onboarding.Post("/steps/1", handler.OnboardingStep1)
+	onboarding.Post("/steps/2", handler.OnboardingStep2)
+	onboarding.Post("/complete", handler.OnboardingComplete)
 
 	sessions := v1.Group("/sessions")
 	sessions.Post("", handler.Login)
@@ -31,6 +50,21 @@ func registerV1APIRoutes(app *fiber.App, handler *Handler) {
 	days.Put("/:date", handler.OwnerOnly, handler.UpsertDay)
 	days.Delete("/:date", handler.OwnerOnly, handler.DeleteDay)
 	days.Post("/:date/cycle-start", handler.OwnerOnly, handler.MarkCycleStart)
+
+	symptoms := v1.Group("/symptoms", handler.AuthRequired)
+	symptoms.Get("", handler.OwnerOnly, handler.GetSymptoms)
+	symptoms.Post("", handler.OwnerOnly, handler.CreateSymptom)
+	symptoms.Patch("/:id", handler.OwnerOnly, handler.UpdateSymptom)
+	symptoms.Delete("/:id", handler.OwnerOnly, handler.DeleteSymptom)
+	symptoms.Post("/:id/restore", handler.OwnerOnly, handler.RestoreSymptom)
+
+	stats := v1.Group("/stats", handler.AuthRequired)
+	stats.Get("/overview", handler.GetStatsOverview)
+
+	exports := v1.Group("/exports", handler.AuthRequired, handler.OwnerOnly)
+	exports.Get("/summary", handler.ExportSummary)
+	exports.Get("/csv", handler.ExportCSV)
+	exports.Get("/json", handler.ExportJSON)
 }
 
 func registerPageRoutes(app *fiber.App, handler *Handler) {
@@ -52,50 +86,13 @@ func registerPageRoutes(app *fiber.App, handler *Handler) {
 	app.Post("/logout", handler.AuthRequired, handler.Logout)
 	app.Get("/privacy", handler.ShowPrivacyPage)
 	app.Get("/onboarding", handler.AuthRequired, handler.ShowOnboarding)
-	app.Post("/onboarding/step1", handler.AuthRequired, handler.OnboardingStep1)
-	app.Post("/onboarding/step2", handler.AuthRequired, handler.OnboardingStep2)
-	app.Post("/onboarding/complete", handler.AuthRequired, handler.OnboardingComplete)
 	app.Get("/", handler.AuthRequired, handler.ShowDashboard)
 	app.Get("/dashboard", handler.AuthRequired, handler.ShowDashboard)
 	app.Get("/calendar", handler.AuthRequired, handler.ShowCalendar)
 	app.Get("/calendar/day/:date", handler.AuthRequired, handler.CalendarDayPanel)
 	app.Get("/stats", handler.AuthRequired, handler.ShowStats)
 	app.Get("/settings", handler.AuthRequired, handler.ShowSettings)
-	app.Post("/settings/cycle", handler.AuthRequired, handler.OwnerOnly, handler.UpdateCycleSettings)
 	app.Get("/settings/2fa", handler.AuthRequired, handler.ShowTOTPSetupPage)
-}
-
-func registerAPIRoutes(app *fiber.App, handler *Handler) {
-	api := app.Group("/api")
-
-	symptoms := api.Group("/symptoms", handler.AuthRequired)
-	symptoms.Get("", handler.OwnerOnly, handler.GetSymptoms)
-	symptoms.Post("", handler.OwnerOnly, handler.CreateSymptom)
-	symptoms.Post("/:id", handler.OwnerOnly, handler.UpdateSymptom)
-	symptoms.Post("/:id/archive", handler.OwnerOnly, handler.ArchiveSymptom)
-	symptoms.Post("/:id/restore", handler.OwnerOnly, handler.RestoreSymptom)
-	symptoms.Delete("/:id", handler.OwnerOnly, handler.DeleteSymptom)
-
-	stats := api.Group("/stats", handler.AuthRequired)
-	stats.Get("/overview", handler.GetStatsOverview)
-
-	export := api.Group("/export", handler.AuthRequired, handler.OwnerOnly)
-	export.Post("/summary", handler.ExportSummary)
-	export.Post("/csv", handler.ExportCSV)
-	export.Post("/json", handler.ExportJSON)
-
-	settings := api.Group("/settings", handler.AuthRequired, handler.OwnerOnly)
-	settings.Post("/interface", handler.UpdateInterfaceSettings)
-	settings.Post("/profile", handler.UpdateProfile)
-	settings.Post("/tracking", handler.UpdateTrackingSettings)
-	settings.Post("/change-password", handler.ChangePassword)
-	settings.Post("/start-local-password-setup", handler.StartLocalPasswordSetupReauth)
-	settings.Post("/regenerate-recovery-code", handler.RegenerateRecoveryCode)
-	settings.Post("/2fa/verify", handler.VerifyTOTP2FAEnrollment)
-	settings.Post("/2fa/disable", handler.DisableTOTP2FA)
-	settings.Post("/clear-data/validate", handler.ValidateClearDataPassword)
-	settings.Post("/clear-data", handler.ClearAllData)
-	settings.Delete("/delete-account", handler.DeleteAccount)
 }
 
 func sendNoContent(c *fiber.Ctx) error {

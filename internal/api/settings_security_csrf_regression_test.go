@@ -11,7 +11,7 @@ import (
 func TestSettingsChangePasswordMissingCSRFRejectedByMiddleware(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-password-csrf@example.com")
 
-	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", url.Values{
+	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", url.Values{
 		"current_password": {"StrongPass1"},
 		"new_password":     {"EvenStronger2"},
 		"confirm_password": {"EvenStronger2"},
@@ -24,7 +24,7 @@ func TestSettingsChangePasswordMissingCSRFRejectedByMiddleware(t *testing.T) {
 func TestSettingsInterfaceMissingCSRFRejectedByMiddleware(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-interface-csrf@example.com")
 
-	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPost, "/api/settings/interface", url.Values{
+	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPatch, "/api/v1/users/current/interface", url.Values{
 		"language": {"en"},
 		"theme":    {"dark"},
 	}, nil)
@@ -36,7 +36,7 @@ func TestSettingsInterfaceMissingCSRFRejectedByMiddleware(t *testing.T) {
 func TestSettingsRegenerateRecoveryCodeMissingCSRFRejectedByMiddleware(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-regenerate-csrf@example.com")
 
-	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPost, "/api/settings/regenerate-recovery-code", url.Values{}, nil)
+	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/recovery-code", url.Values{}, nil)
 	defer response.Body.Close()
 
 	assertStatusCode(t, response, http.StatusForbidden)
@@ -45,7 +45,7 @@ func TestSettingsRegenerateRecoveryCodeMissingCSRFRejectedByMiddleware(t *testin
 func TestSettingsClearDataMissingCSRFRejectedByMiddleware(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-clear-data-csrf@example.com")
 
-	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPost, "/api/settings/clear-data", url.Values{
+	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/data-wipe", url.Values{
 		"password": {"StrongPass1"},
 	}, nil)
 	defer response.Body.Close()
@@ -56,7 +56,7 @@ func TestSettingsClearDataMissingCSRFRejectedByMiddleware(t *testing.T) {
 func TestSettingsClearDataValidateMissingCSRFRejectedByMiddleware(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-clear-data-validate-csrf@example.com")
 
-	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPost, "/api/settings/clear-data/validate", url.Values{
+	response := settingsRequestWithoutCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/data-wipe/validate", url.Values{
 		"password": {"StrongPass1"},
 	}, nil)
 	defer response.Body.Close()
@@ -67,7 +67,7 @@ func TestSettingsClearDataValidateMissingCSRFRejectedByMiddleware(t *testing.T) 
 func TestSettingsDeleteAccountMissingCSRFRejectedByMiddleware(t *testing.T) {
 	ctx := newSettingsSecurityTestContext(t, "settings-delete-account-csrf@example.com")
 
-	response := settingsRequestWithoutCSRF(t, ctx, http.MethodDelete, "/api/settings/delete-account", url.Values{
+	response := settingsRequestWithoutCSRF(t, ctx, http.MethodDelete, "/api/v1/users/current", url.Values{
 		"password": {"StrongPass1"},
 	}, map[string]string{
 		"Accept": "application/json",

@@ -14,7 +14,7 @@ func TestExportJSONRejectsInvalidDateRange(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "export-invalid-range@example.com", "StrongPass1", true)
 
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
-	request := newExportRequestForTest(t, "/api/export/json?from=2026-02-20&to=2026-02-10", authCookie)
+	request := newExportRequestForTest(t, "/api/v1/exports/json?from=2026-02-20&to=2026-02-10", authCookie)
 
 	response, err := app.Test(request, -1)
 	if err != nil {
@@ -49,7 +49,7 @@ func TestExportJSONRejectsInvalidFromDate(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "export-invalid-from@example.com", "StrongPass1", true)
 
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
-	request := newExportRequestForTest(t, "/api/export/json?from=not-a-date&to=2026-02-10", authCookie)
+	request := newExportRequestForTest(t, "/api/v1/exports/json?from=not-a-date&to=2026-02-10", authCookie)
 
 	response, err := app.Test(request, -1)
 	if err != nil {
@@ -84,7 +84,7 @@ func TestExportJSONRejectsInvalidToDate(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "export-invalid-to@example.com", "StrongPass1", true)
 
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
-	request := newExportRequestForTest(t, "/api/export/json?from=2026-02-10&to=not-a-date", authCookie)
+	request := newExportRequestForTest(t, "/api/v1/exports/json?from=2026-02-10&to=not-a-date", authCookie)
 
 	response, err := app.Test(request, -1)
 	if err != nil {

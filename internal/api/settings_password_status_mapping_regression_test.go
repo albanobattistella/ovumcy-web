@@ -17,7 +17,7 @@ func TestSettingsChangePasswordInvalidCurrentPasswordJSONStatus(t *testing.T) {
 		"new_password":     {"EvenStronger2"},
 		"confirm_password": {"EvenStronger2"},
 	}
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", form, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", form, map[string]string{
 		"Accept": "application/json",
 	})
 	defer response.Body.Close()
@@ -35,7 +35,7 @@ func TestSettingsChangePasswordInvalidInputJSONStatus(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "settings-password-invalid-input@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookie(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/change-password", strings.NewReader(`{"current_password":`))
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/users/current/password", strings.NewReader(`{"current_password":`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Cookie", authCookie)
@@ -62,7 +62,7 @@ func TestSettingsChangePasswordInvalidCurrentPasswordHTMXInlineError(t *testing.
 		"new_password":     {"EvenStronger2"},
 		"confirm_password": {"EvenStronger2"},
 	}
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/settings/change-password", form, map[string]string{
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPut, "/api/v1/users/current/password", form, map[string]string{
 		"HX-Request":      "true",
 		"Accept-Language": "en",
 	})

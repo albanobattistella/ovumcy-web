@@ -13,17 +13,14 @@ import (
 func TestSettingsCycleUpdateRedirectsUnauthenticatedUsersToLogin(t *testing.T) {
 	app, _ := newOnboardingTestApp(t)
 
-	request := httptest.NewRequest(http.MethodPost, "/settings/cycle", strings.NewReader(url.Values{
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/cycle", strings.NewReader(url.Values{
 		"cycle_length":  {"28"},
 		"period_length": {"5"},
 	}.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	response := mustAppResponse(t, app, request)
-	assertStatusCode(t, response, http.StatusSeeOther)
-	if location := response.Header.Get("Location"); location != "/login" {
-		t.Fatalf("expected redirect to /login, got %q", location)
-	}
+	assertStatusCode(t, response, http.StatusUnauthorized)
 }
 
 func TestSettingsCycleUpdateRejectsUnsupportedLegacyRoleJSON(t *testing.T) {
@@ -35,7 +32,7 @@ func TestSettingsCycleUpdateRejectsUnsupportedLegacyRoleJSON(t *testing.T) {
 	user.Role = "partner"
 	authCookie := issueAuthCookieForUser(t, user)
 
-	request := httptest.NewRequest(http.MethodPost, "/settings/cycle", strings.NewReader(url.Values{
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/cycle", strings.NewReader(url.Values{
 		"cycle_length":  {"28"},
 		"period_length": {"5"},
 	}.Encode()))
@@ -55,7 +52,7 @@ func TestSettingsCycleUpdateMissingCSRFRejectedByMiddleware(t *testing.T) {
 	user := createOnboardingTestUser(t, database, "settings-cycle-csrf@example.com", "StrongPass1", true)
 	authCookie := loginAndExtractAuthCookieWithCSRF(t, app, user.Email, "StrongPass1")
 
-	request := httptest.NewRequest(http.MethodPost, "/settings/cycle", strings.NewReader(url.Values{
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/cycle", strings.NewReader(url.Values{
 		"cycle_length":  {"28"},
 		"period_length": {"5"},
 	}.Encode()))

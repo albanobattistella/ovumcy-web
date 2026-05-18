@@ -294,9 +294,9 @@
 
       var requestID = ++summaryRequestID;
       try {
-        var response = await fetch(SUMMARY_ENDPOINT, {
-          method: "POST",
-          body: requestBody,
+        var summaryURL = SUMMARY_ENDPOINT + (requestBody ? "?" + requestBody : "");
+        var response = await fetch(summaryURL, {
+          method: "GET",
           credentials: "same-origin",
           headers: buildAcceptLanguageHeaders(),
           signal: summaryAbortController ? summaryAbortController.signal : undefined

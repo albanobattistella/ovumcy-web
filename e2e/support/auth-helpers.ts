@@ -135,8 +135,8 @@ export async function completeOnboardingIfPresent(page: Page): Promise<void> {
   }
 
   const startDateInput = page.locator('#last-period-start');
-  const stepOneForm = page.locator('form[hx-post="/onboarding/step1"]');
-  const stepTwoForm = page.locator('form[hx-post="/onboarding/step2"]');
+  const stepOneForm = page.locator('form[hx-post="/api/v1/onboarding/steps/1"]');
+  const stepTwoForm = page.locator('form[hx-post="/api/v1/onboarding/steps/2"]');
   const isStepOneVisible = await stepOneForm.isVisible().catch(() => false);
   const isStepTwoVisible = await stepTwoForm.isVisible().catch(() => false);
 

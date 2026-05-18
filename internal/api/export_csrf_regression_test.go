@@ -4,43 +4,49 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 )
 
-func TestExportCSVRejectsMissingCSRFFromAuthenticatedPost(t *testing.T) {
+// TestExportCSVDoesNotRequireCSRFForGET documents that the v1 export
+// surface is GET-only; CSRF middleware does not gate GET requests, so an
+// authenticated client can pull the CSV with the auth cookie alone. This
+// replaces the previous regression that asserted POST-without-CSRF was
+// rejected with 403: that contract collapses with the POST -> GET flip.
+func TestExportCSVDoesNotRequireCSRFForGET(t *testing.T) {
 	t.Parallel()
 
 	ctx := newSettingsSecurityTestContext(t, "export-csrf-missing@example.com")
 
-	request := httptest.NewRequest(http.MethodPost, "/api/export/csv", strings.NewReader(url.Values{
-		"from": {"2026-02-01"},
-		"to":   {"2026-02-28"},
-	}.Encode()))
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/exports/csv?from=2026-02-01&to=2026-02-28", nil)
 	request.Header.Set("Cookie", ctx.authCookie)
 
 	response, err := ctx.app.Test(request, -1)
 	if err != nil {
-		t.Fatalf("export request without csrf failed: %v", err)
+		t.Fatalf("export GET without csrf failed: %v", err)
 	}
 	defer response.Body.Close()
 
-	if response.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected status 403, got %d", response.StatusCode)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.StatusCode)
+	}
+	if got := response.Header.Get("Content-Type"); !strings.Contains(got, "text/csv") {
+		t.Fatalf("expected text/csv content type, got %q", got)
 	}
 }
 
-func TestExportCSVAcceptsValidCSRFPost(t *testing.T) {
+func TestExportCSVSucceedsForAuthenticatedGET(t *testing.T) {
 	t.Parallel()
 
 	ctx := newSettingsSecurityTestContext(t, "export-csrf-valid@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/export/csv", url.Values{
-		"from": {"2026-02-01"},
-		"to":   {"2026-02-28"},
-	}, nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/exports/csv?from=2026-02-01&to=2026-02-28", nil)
+	request.Header.Set("Cookie", ctx.authCookie)
+
+	response, err := ctx.app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("export GET failed: %v", err)
+	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {

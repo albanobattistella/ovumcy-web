@@ -9,12 +9,12 @@ import (
 	"testing"
 )
 
-func assertSettingsFlashSuccessScenario(t *testing.T, path string, form url.Values, successLabel string) {
+func assertSettingsFlashSuccessScenario(t *testing.T, method string, path string, form url.Values, successLabel string) {
 	t.Helper()
 
 	ctx := newSettingsSecurityTestContext(t, "settings-user@example.com")
 
-	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, path, form, nil)
+	response := settingsFormRequestWithCSRF(t, ctx, method, path, form, nil)
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusSeeOther {

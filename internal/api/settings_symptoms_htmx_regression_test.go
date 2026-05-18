@@ -23,7 +23,7 @@ func TestSettingsSymptomsHTMXCreateArchiveRestoreRerendersSection(t *testing.T) 
 		"name":       {"Joint stiffness"},
 		"icon":       {"J"},
 	}
-	renderedCreate := performSettingsSymptomsHTMXRequest(t, ctx, http.MethodPost, "/api/symptoms", createForm)
+	renderedCreate := performSettingsSymptomsHTMXRequest(t, ctx, http.MethodPost, "/api/v1/symptoms", createForm)
 	assertBodyContainsAll(t, renderedCreate,
 		bodyStringMatch{fragment: `data-settings-symptoms`, message: "expected settings symptoms section rerender"},
 		bodyStringMatch{fragment: `maxlength="40"`, message: "expected create form to cap symptom name at 40 characters"},
@@ -40,7 +40,7 @@ func TestSettingsSymptomsHTMXCreateArchiveRestoreRerendersSection(t *testing.T) 
 	}
 
 	archiveForm := url.Values{"csrf_token": {ctx.csrfToken}}
-	renderedArchive := performSettingsSymptomsHTMXRequest(t, ctx, http.MethodPost, "/api/symptoms/"+strconv.FormatUint(uint64(stored.ID), 10)+"/archive", archiveForm)
+	renderedArchive := performSettingsSymptomsHTMXRequest(t, ctx, http.MethodDelete, "/api/v1/symptoms/"+strconv.FormatUint(uint64(stored.ID), 10), archiveForm)
 	assertBodyContainsAll(t, renderedArchive,
 		bodyStringMatch{fragment: `data-settings-symptoms`, message: "expected settings symptoms section rerender after archive"},
 	)
@@ -53,7 +53,7 @@ func TestSettingsSymptomsHTMXCreateArchiveRestoreRerendersSection(t *testing.T) 
 	}
 
 	restoreForm := url.Values{"csrf_token": {ctx.csrfToken}}
-	renderedRestore := performSettingsSymptomsHTMXRequest(t, ctx, http.MethodPost, "/api/symptoms/"+strconv.FormatUint(uint64(stored.ID), 10)+"/restore", restoreForm)
+	renderedRestore := performSettingsSymptomsHTMXRequest(t, ctx, http.MethodPost, "/api/v1/symptoms/"+strconv.FormatUint(uint64(stored.ID), 10)+"/restore", restoreForm)
 	assertBodyContainsAll(t, renderedRestore,
 		bodyStringMatch{fragment: `data-settings-symptoms`, message: "expected settings symptoms section rerender after restore"},
 	)
@@ -99,7 +99,7 @@ func TestSettingsSymptomsHTMXUpdateDuplicateShowsRowLocalError(t *testing.T) {
 		"name":       {"Joint stiffness"},
 		"icon":       {"🔥"},
 	}
-	updateRequest := httptest.NewRequest(http.MethodPost, "/api/symptoms/"+strconv.FormatUint(uint64(archived.ID), 10), strings.NewReader(updateForm.Encode()))
+	updateRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/symptoms/"+strconv.FormatUint(uint64(archived.ID), 10), strings.NewReader(updateForm.Encode()))
 	updateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	updateRequest.Header.Set("HX-Request", "true")
 	updateRequest.Header.Set("Cookie", joinCookieHeader(authCookie, cookiePair(csrfCookie)))
@@ -142,7 +142,7 @@ func TestSettingsSymptomsHTMXCreateTooLongDoesNotPersistSymptom(t *testing.T) {
 		"name":       {"12345678901234567890123456789012345678901"},
 		"icon":       {"✨"},
 	}
-	createRequest := httptest.NewRequest(http.MethodPost, "/api/symptoms", strings.NewReader(createForm.Encode()))
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/v1/symptoms", strings.NewReader(createForm.Encode()))
 	createRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	createRequest.Header.Set("HX-Request", "true")
 	createRequest.Header.Set("Cookie", joinCookieHeader(authCookie, cookiePair(csrfCookie)))
@@ -195,7 +195,7 @@ func TestSettingsSymptomsHTMXUpdateTooLongKeepsStoredSymptomUnchanged(t *testing
 		"name":       {"12345678901234567890123456789012345678901"},
 		"icon":       {"🔥"},
 	}
-	updateRequest := httptest.NewRequest(http.MethodPost, "/api/symptoms/"+strconv.FormatUint(uint64(symptom.ID), 10), strings.NewReader(updateForm.Encode()))
+	updateRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/symptoms/"+strconv.FormatUint(uint64(symptom.ID), 10), strings.NewReader(updateForm.Encode()))
 	updateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	updateRequest.Header.Set("HX-Request", "true")
 	updateRequest.Header.Set("Cookie", joinCookieHeader(authCookie, cookiePair(csrfCookie)))
@@ -248,7 +248,7 @@ func TestSettingsSymptomsHTMXUpdateWithoutColorPreservesStoredValue(t *testing.T
 		"name":       {"Joint relief"},
 		"icon":       {"🔥"},
 	}
-	updateRequest := httptest.NewRequest(http.MethodPost, "/api/symptoms/"+strconv.FormatUint(uint64(symptom.ID), 10), strings.NewReader(updateForm.Encode()))
+	updateRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/symptoms/"+strconv.FormatUint(uint64(symptom.ID), 10), strings.NewReader(updateForm.Encode()))
 	updateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	updateRequest.Header.Set("HX-Request", "true")
 	updateRequest.Header.Set("Cookie", joinCookieHeader(authCookie, cookiePair(csrfCookie)))

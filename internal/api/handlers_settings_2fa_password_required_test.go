@@ -31,13 +31,13 @@ func TestVerifyTOTP2FAEnrollment_MissingPassword_DoesNotEnable(t *testing.T) {
 	cloned := cloneFormValues(form)
 	cloned.Set("csrf_token", ctx.csrfToken)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/2fa/verify", strings.NewReader(cloned.Encode()))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/users/current/2fa", strings.NewReader(cloned.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Cookie", joinCookieHeader(ctx.authCookie, cookiePair(ctx.csrfCookie), setupCookie))
 	resp, err := ctx.app.Test(req, -1)
 	if err != nil {
-		t.Fatalf("POST /api/settings/2fa/verify: %v", err)
+		t.Fatalf("POST /api/v1/users/current/2fa: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -75,13 +75,13 @@ func TestVerifyTOTP2FAEnrollment_WrongPassword_DoesNotEnable(t *testing.T) {
 	cloned := cloneFormValues(form)
 	cloned.Set("csrf_token", ctx.csrfToken)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/settings/2fa/verify", strings.NewReader(cloned.Encode()))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/users/current/2fa", strings.NewReader(cloned.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Cookie", joinCookieHeader(ctx.authCookie, cookiePair(ctx.csrfCookie), setupCookie))
 	resp, err := ctx.app.Test(req, -1)
 	if err != nil {
-		t.Fatalf("POST /api/settings/2fa/verify: %v", err)
+		t.Fatalf("POST /api/v1/users/current/2fa: %v", err)
 	}
 	defer resp.Body.Close()
 

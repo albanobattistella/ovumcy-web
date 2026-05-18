@@ -78,7 +78,7 @@ func TestOnboardingPersistsLastPeriodStartUsingFormTimezoneFallback(t *testing.T
 		"last_period_start":         {localToday},
 		onboardingTimezoneFieldName: {timezoneName},
 	}
-	step1Response := onboardingHTMXResponse(t, app, http.MethodPost, "/onboarding/step1", authCookie, "", step1Form)
+	step1Response := onboardingHTMXResponse(t, app, http.MethodPost, "/api/v1/onboarding/steps/1", authCookie, "", step1Form)
 	if step1Response.StatusCode != http.StatusNoContent {
 		t.Fatalf("expected status %d, got %d with body %q", http.StatusNoContent, step1Response.StatusCode, mustReadBodyString(t, step1Response.Body))
 	}
@@ -95,13 +95,13 @@ func TestOnboardingPersistsLastPeriodStartUsingFormTimezoneFallback(t *testing.T
 		"auto_period_fill":          {"true"},
 		onboardingTimezoneFieldName: {timezoneName},
 	}
-	step2Response := onboardingHTMXResponse(t, app, http.MethodPost, "/onboarding/step2", timezoneCookieHeader, "", step2Form)
+	step2Response := onboardingHTMXResponse(t, app, http.MethodPost, "/api/v1/onboarding/steps/2", timezoneCookieHeader, "", step2Form)
 	assertStatusCode(t, step2Response, http.StatusNoContent)
 
 	completeForm := url.Values{
 		onboardingTimezoneFieldName: {timezoneName},
 	}
-	completeResponse := onboardingHTMXResponse(t, app, http.MethodPost, "/onboarding/complete", timezoneCookieHeader, "", completeForm)
+	completeResponse := onboardingHTMXResponse(t, app, http.MethodPost, "/api/v1/onboarding/complete", timezoneCookieHeader, "", completeForm)
 	assertStatusCode(t, completeResponse, http.StatusOK)
 	if redirect := completeResponse.Header.Get("HX-Redirect"); redirect != "/dashboard" {
 		t.Fatalf("expected HX-Redirect /dashboard, got %q", redirect)
@@ -139,7 +139,7 @@ func TestOnboardingPersistsLastPeriodStartUsingFormTimezoneFallback(t *testing.T
 func submitOnboardingStep1WithTimezone(t *testing.T, app *fiber.App, authCookie string, timezoneName string, form url.Values) {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step1", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/1", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", joinCookieHeader(authCookie, timezoneCookieName+"="+timezoneName))
@@ -152,7 +152,7 @@ func submitOnboardingStep1WithTimezone(t *testing.T, app *fiber.App, authCookie 
 func submitOnboardingStep2WithTimezone(t *testing.T, app *fiber.App, authCookie string, timezoneName string, form url.Values) {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/step2", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/steps/2", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", joinCookieHeader(authCookie, timezoneCookieName+"="+timezoneName))
@@ -165,7 +165,7 @@ func submitOnboardingStep2WithTimezone(t *testing.T, app *fiber.App, authCookie 
 func submitOnboardingCompleteWithTimezone(t *testing.T, app *fiber.App, authCookie string, timezoneName string) {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, "/onboarding/complete", nil)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/onboarding/complete", nil)
 	request.Header.Set("HX-Request", "true")
 	request.Header.Set("Cookie", joinCookieHeader(authCookie, timezoneCookieName+"="+timezoneName))
 	request.Header.Set(timezoneHeaderName, timezoneName)

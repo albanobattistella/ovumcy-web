@@ -26,7 +26,7 @@ func TestStateMutationAcceptsCSRFTokenViaXCSRFTokenHeader(t *testing.T) {
 		"display_name": {"Header Persona"},
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Cookie", settingsCookieHeader(ctx.authCookie, ctx.csrfCookie))
 	request.Header.Set("X-CSRF-Token", ctx.csrfToken)
@@ -53,7 +53,7 @@ func TestStateMutationRejectsInvalidCSRFTokenInHeader(t *testing.T) {
 		"display_name": {"Invalid Header Token"},
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Cookie", settingsCookieHeader(ctx.authCookie, ctx.csrfCookie))
 	request.Header.Set("X-CSRF-Token", "definitely-not-the-real-token")
@@ -82,7 +82,7 @@ func TestStateMutationPrefersFormCSRFFieldOverHeader(t *testing.T) {
 		"csrf_token":   {ctx.csrfToken},
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/settings/profile", strings.NewReader(form.Encode()))
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/users/current/profile", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Cookie", settingsCookieHeader(ctx.authCookie, ctx.csrfCookie))
 	request.Header.Set("X-CSRF-Token", "stale-or-bogus")
