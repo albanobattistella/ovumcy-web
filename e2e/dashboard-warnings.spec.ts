@@ -157,14 +157,17 @@ test.describe('Calendar: future cycle start notice', () => {
     page,
   }) => {
     // ShowFutureCycleStartNotice = isFutureDate && AllowManualCycleStart.
-    // IsAllowedManualCycleStartDate caps the future window at today+2 days,
-    // and AllowManualCycleStart is true for owners by default — so the day
-    // editor for tomorrow flips the notice on.
+    // The future window caps at today+2 and AllowManualCycleStart is true
+    // for owners by default, so the day editor for tomorrow flips the
+    // notice on. The notice lives as a sibling to data-day-editor-form
+    // (right under the manual cycle-start subform), so scope the assertion
+    // to the #day-editor panel rather than the form itself.
     await registerAndOnboardDefault(page, 'calendar-future-cycle-start');
     const today = await todayISOFromDashboard(page);
     const tomorrow = shiftISODate(today, 1);
 
-    const form = await openCalendarDayEditor(page, tomorrow);
-    await expect(form).toContainText('Predictions will be recalculated when that day arrives.');
+    await openCalendarDayEditor(page, tomorrow);
+    const dayEditor = page.locator('#day-editor');
+    await expect(dayEditor).toContainText('Predictions will be recalculated when that day arrives.');
   });
 });
