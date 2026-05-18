@@ -813,6 +813,7 @@
   function runDashboardAutosave(form, keepalive) {
     var requestVersion;
     var url;
+    var method;
     var headers;
     var body;
     var timezone;
@@ -833,7 +834,21 @@
     setDashboardAutosaveIndicator(form, "saving");
 
     requestVersion = form.__ovumcyAutosaveVersion || 0;
-    url = String(form.getAttribute("hx-post") || form.getAttribute("action") || "").trim();
+    // Pick the HTTP verb from whichever hx-* attribute the form uses so the
+    // autosave fetch tracks the canonical REST verb declared in the template
+    // (PUT for /api/v1/days/{date} upsert, falling back to POST / action for
+    // legacy or non-HTMX forms).
+    var hxVerbs = ["hx-put", "hx-patch", "hx-delete", "hx-post"];
+    method = "POST";
+    url = String(form.getAttribute("action") || "").trim();
+    for (var verbIndex = 0; verbIndex < hxVerbs.length; verbIndex += 1) {
+      var hxValue = form.getAttribute(hxVerbs[verbIndex]);
+      if (hxValue) {
+        method = hxVerbs[verbIndex].substring(3).toUpperCase();
+        url = String(hxValue).trim();
+        break;
+      }
+    }
     headers = {
       "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
       "HX-Request": "true"
@@ -849,7 +864,7 @@
     }
 
     form.__ovumcyAutosaveInFlight = window.fetch(url, {
-      method: "POST",
+      method: method,
       credentials: "same-origin",
       keepalive: !!keepalive,
       headers: headers,
