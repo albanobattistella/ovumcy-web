@@ -221,46 +221,64 @@ func (service *DayService) UpsertDayEntryWithAutoFillAt(userID uint, day time.Ti
 	}
 
 	dayStart, _ := DayRange(day, location)
-	autoPeriodFillEnabled := false
-	periodLength := models.DefaultPeriodLength
-
 	entry, wasPeriod, err := service.UpsertDayEntry(userID, dayStart, normalized, location)
 	if err != nil {
 		return models.DailyLog{}, err
 	}
 
-	if normalized.IsPeriod || wasPeriod {
-		periodLength, autoPeriodFillEnabled, err = service.LoadAutoFillSettings(userID)
-		if err != nil {
-			return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillLoadFailed, err)
-		}
-	}
-
-	if normalized.IsPeriod {
-		shouldAutoFill, err := service.ShouldAutoFillPeriodDays(userID, dayStart, wasPeriod, autoPeriodFillEnabled, periodLength, location)
-		if err != nil {
-			return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillCheckFailed, err)
-		}
-		if shouldAutoFill {
-			if err := service.AutoFillFollowingPeriodDays(userID, dayStart, periodLength, normalized.Flow, now, location); err != nil {
-				return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillApplyFailed, err)
-			}
-		}
-	} else if wasPeriod && autoPeriodFillEnabled {
-		shouldClear, err := service.shouldClearAutoFilledNeighbors(userID, dayStart, location)
-		if err != nil {
-			return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillCheckFailed, err)
-		}
-		if shouldClear {
-			if err := service.ClearAutoFilledPeriodNeighbors(userID, dayStart, periodLength, location); err != nil {
-				return models.DailyLog{}, fmt.Errorf("%w: %v", ErrDayAutoFillApplyFailed, err)
-			}
-		}
+	if err := service.applyPeriodAutoFillSideEffects(userID, dayStart, normalized, wasPeriod, now, location); err != nil {
+		return models.DailyLog{}, err
 	}
 
 	service.refreshDerivedCycleSettings(userID, location)
-
 	return entry, nil
+}
+
+func (service *DayService) applyPeriodAutoFillSideEffects(userID uint, dayStart time.Time, normalized DayEntryInput, wasPeriod bool, now time.Time, location *time.Location) error {
+	if !normalized.IsPeriod && !wasPeriod {
+		return nil
+	}
+
+	periodLength, autoPeriodFillEnabled, err := service.LoadAutoFillSettings(userID)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrDayAutoFillLoadFailed, err)
+	}
+
+	if normalized.IsPeriod {
+		return service.autoFillNewPeriodAnchor(userID, dayStart, wasPeriod, autoPeriodFillEnabled, periodLength, normalized.Flow, now, location)
+	}
+	if !autoPeriodFillEnabled {
+		return nil
+	}
+	return service.clearAutoFilledNeighborsIfBare(userID, dayStart, periodLength, location)
+}
+
+func (service *DayService) autoFillNewPeriodAnchor(userID uint, dayStart time.Time, wasPeriod bool, autoPeriodFillEnabled bool, periodLength int, flow string, now time.Time, location *time.Location) error {
+	shouldAutoFill, err := service.ShouldAutoFillPeriodDays(userID, dayStart, wasPeriod, autoPeriodFillEnabled, periodLength, location)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrDayAutoFillCheckFailed, err)
+	}
+	if !shouldAutoFill {
+		return nil
+	}
+	if err := service.AutoFillFollowingPeriodDays(userID, dayStart, periodLength, flow, now, location); err != nil {
+		return fmt.Errorf("%w: %v", ErrDayAutoFillApplyFailed, err)
+	}
+	return nil
+}
+
+func (service *DayService) clearAutoFilledNeighborsIfBare(userID uint, dayStart time.Time, periodLength int, location *time.Location) error {
+	shouldClear, err := service.shouldClearAutoFilledNeighbors(userID, dayStart, location)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrDayAutoFillCheckFailed, err)
+	}
+	if !shouldClear {
+		return nil
+	}
+	if err := service.ClearAutoFilledPeriodNeighbors(userID, dayStart, periodLength, location); err != nil {
+		return fmt.Errorf("%w: %v", ErrDayAutoFillApplyFailed, err)
+	}
+	return nil
 }
 
 func (service *DayService) shouldClearAutoFilledNeighbors(userID uint, dayStart time.Time, location *time.Location) (bool, error) {
