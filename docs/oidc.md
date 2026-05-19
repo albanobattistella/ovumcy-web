@@ -134,19 +134,27 @@ Important caveats — read these before relying on any row in the table:
 | Authelia | Verified supported | Local-only fallback | v0.8.0 | Sign-in is supported. Authelia does not currently expose `end_session_endpoint`, so Ovumcy clears its own session and returns to `/login`. |
 | ZITADEL | Supported with the full official deployment | Provider logout depends on the full deployment | v0.8.0 | Discovery metadata and app setup are compatible, but browser sign-in requires the full ZITADEL deployment that includes the separate Login UI application under `/ui/v2/login`. |
 | Dex | Verified unsupported | Not applicable | v0.8.0 | Dex returned `code` and `state` in the callback URL query during live verification, which conflicts with Ovumcy's `form_post`-only HTML callback contract. |
-| Pocket ID | Verified unsupported | Not applicable | v0.8.0 | Pocket ID returned `code`, `state`, and issuer data in the callback URL query during live verification, which conflicts with Ovumcy's `form_post`-only HTML callback contract. |
+| Pocket ID (2.7.0+) | Reported supported, re-verification pending | Not re-verified | v0.8.0 (pre-2.7.0) | Pocket ID 2.7.0 added `response_mode=form_post` support upstream. [#62](https://github.com/ovumcy/ovumcy-web/issues/62) reports that sign-in works end-to-end against Ovumcy 0.9.5. Ovumcy has not re-verified Pocket ID 2.7.0 in its local test stack; logout has not been independently checked. Pocket ID versions older than 2.7.0 remain incompatible. |
 
-### Why Dex and Pocket ID Are Excluded
+### Why Dex Is Excluded
 
 Ovumcy intentionally requires `response_mode=form_post` for browser sign-in so auth-sensitive transport data such as `code`, `state`, and provider error details do not appear in user-visible URLs.
 
-During verification in the local test stack, both Dex and Pocket ID returned callback data in the URL query instead. That behavior conflicts with Ovumcy's hardened callback transport contract, so they are currently treated as unsupported rather than weakening the security model.
+During verification in the local test stack, Dex returned callback data in the URL query instead. That behavior conflicts with Ovumcy's hardened callback transport contract, so Dex is currently treated as unsupported rather than weakening the security model.
+
+Earlier Pocket ID versions had the same problem; see the [Pocket ID](#pocket-id) section below for the 2.7.0+ status.
 
 ### Pocket ID
 
-Pocket ID is currently not supported under Ovumcy's hardened callback model.
+Pocket ID 2.7.0 added `response_mode=form_post` support upstream, and issue [#62](https://github.com/ovumcy/ovumcy-web/issues/62) reports that sign-in works end-to-end against Ovumcy 0.9.5 with Pocket ID 2.7.0.
 
-Verification in the local test stack showed Pocket ID returning auth-sensitive callback parameters in the browser URL instead of using `response_mode=form_post`. Until Pocket ID can satisfy the same browser callback contract, do not advertise it as a supported Ovumcy provider.
+Treat this row as **community-reported, re-verification pending**:
+
+- Ovumcy has not yet re-verified Pocket ID 2.7.0 in its local test stack, so the matrix does not promote it to `Verified supported`.
+- Logout behavior at 2.7.0 has not been independently exercised; pin `OIDC_LOGOUT_MODE=local` if you need a predictable outcome until that is checked.
+- Pocket ID versions older than 2.7.0 returned auth-sensitive callback parameters in the browser URL instead of using `response_mode=form_post` and remain incompatible with Ovumcy's hardened browser callback contract.
+
+Operators choosing Pocket ID 2.7.0+ should treat the integration as community-supported until a future Ovumcy release tag updates the "Last verified in" column for this row.
 
 ### Authentik
 
@@ -319,11 +327,11 @@ This usually means one of these is true:
 
 In that case, Ovumcy still performs a safe local logout and redirects back to `/login`.
 
-### Pocket ID and Dex are rejected even though upstream login succeeds
+### Dex (and Pocket ID older than 2.7.0) are rejected even though upstream login succeeds
 
 This is expected under Ovumcy's current browser callback hardening.
 
-Both providers were observed in the local test stack returning auth-sensitive callback data in the URL query instead of a `form_post` callback. Ovumcy intentionally refuses that transport shape rather than weakening the URL-safety contract for HTML sign-in.
+Those providers were observed in the local test stack returning auth-sensitive callback data in the URL query instead of a `form_post` callback. Ovumcy intentionally refuses that transport shape rather than weakening the URL-safety contract for HTML sign-in. Pocket ID 2.7.0+ adds `response_mode=form_post` upstream and is community-reported to work; see the matrix above.
 
 ## Official Provider Documentation
 
@@ -333,8 +341,8 @@ For provider-specific UI details, use the current official docs:
 - Keycloak server admin docs: https://www.keycloak.org/docs/latest/server_admin/
 - Authelia OIDC client config: https://www.authelia.com/configuration/identity-providers/openid-connect/clients/
 - ZITADEL self-hosting and login application docs: https://zitadel.com/docs/self-hosting
-- Pocket ID OIDC client authentication: https://pocket-id.org/docs/guides/oidc-client-authentication/ (currently incompatible with Ovumcy's hardened browser callback model)
-- Pocket ID client examples and callback/logout fields: https://pocket-id.org/docs/client-examples/outline (currently incompatible with Ovumcy's hardened browser callback model)
+- Pocket ID OIDC client authentication: https://pocket-id.org/docs/guides/oidc-client-authentication/ (supported on Pocket ID 2.7.0+; older versions are incompatible)
+- Pocket ID client examples and callback/logout fields: https://pocket-id.org/docs/client-examples/outline (supported on Pocket ID 2.7.0+; older versions are incompatible)
 - Pocket ID troubleshooting: https://pocket-id.org/docs/troubleshooting/common-issues
 - Dex static clients and redirect URIs: https://dexidp.io/docs/connectors/local/ (currently incompatible with Ovumcy's hardened browser callback model)
 - Dex scopes and email claims: https://dexidp.io/docs/configuration/custom-scopes-claims-clients/
