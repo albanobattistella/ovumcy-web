@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-23
+
+### Security
+
+- **TOTP step-up on `/auth/oidc/link-confirm`.** When the target local-auth account has TOTP enabled, the link-confirmation submission must additionally carry a valid 6-digit `totp_code` form field. The handler runs `TOTPService.CheckRateLimit` and `ValidateCode` with the same per-`(client_ip, user_id)` failure counter and replay rejection (`ErrTOTPReplayed`) as `POST /api/v1/sessions/2fa-challenge`. Previously the handler called `AuthService.AuthenticateCredentials` (password only) and went straight to `setAuthCookie`, allowing an attacker with the victim's password plus a malicious or sloppy upstream IdP to obtain a session and persist a linked OIDC identity without ever holding the second factor.
+- **AEAD codec coverage** for `ovumcy_oidc_link_pending` adds the canonical four-invariant lock (round-trip, cross-purpose AAD, tampered byte, rotated key) plus payload expiry and builder field validation. The cookie landed in v1.0.0 without dedicated codec regressions.
+- **CSRF route-level locks** for `POST /auth/oidc/link-confirm` and `DELETE /api/v1/days/:date` with the real CSRF middleware enabled, closing the SECURITY.md route-coverage requirement for both endpoints.
+- **Cross-user privacy regressions**: Owner B's `GET /api/v1/symptoms` must not surface Owner A's custom symptoms; Owner B's `DELETE /api/v1/days/:date` must not remove Owner A's row on the same calendar day.
+- **Sensitive-field leak guard** on `GET /api/v1/users/current` (explicit deny-list assertion on `password_hash`, `recovery_code_hash`, `totp_secret`).
+
+### Fixed
+
+- **`days`** (issue #64): `UpsertDayEntry` was re-applying `DayRange` to a value already canonicalized to UTC-midnight by the caller. For UTC-minus locales `DateAtLocation` shifted the lookup window one day backward, so a second `PUT /api/v1/days/{date}` for the same calendar day missed the existing row and the follow-up `Create` collided with the `uidx_user_date` unique index. Replaced with direct `[dayStart, dayStart+24h)` bounds plus a defensive UTC-midnight normalization at the function entry.
+
+### Changed
+
+- **Link-confirm template** conditionally surfaces a TOTP input when `TOTPRequired=true` (computed in `ShowOIDCLinkConfirmPage` from the target user's `TOTPEnabled`), reusing the `auth.2fa.code_label` / `auth.2fa.code_placeholder` i18n keys.
+- **`SECURITY.md`**: new `### OIDC Account Linking` section in the Test Enforcement Matrix links every claim about the link-confirm flow to the specific Go test. Threat-model bullet on malicious-IdP account takeover extended to mention the TOTP gate.
+- **`DeleteDay` handler** gains an idempotency lock: `DELETE /api/v1/days/{date}` on a day that has no row returns 204 explicitly.
+- **Rate-limit responder coverage** now exercises both the JSON envelope and the HTML fallback path on `RespondAPIRateLimited`.
+
 ## [1.0.0] - 2026-05-19
 
 ### Changed
@@ -413,7 +434,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CSV/JSON export,
   - Russian/English localization.
 
-[Unreleased]: https://github.com/ovumcy/ovumcy-web/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ovumcy/ovumcy-web/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ovumcy/ovumcy-web/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ovumcy/ovumcy-web/compare/v0.9.5...v1.0.0
 [0.9.5]: https://github.com/ovumcy/ovumcy-web/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/ovumcy/ovumcy-web/compare/v0.9.3...v0.9.4
