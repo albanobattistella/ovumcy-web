@@ -224,3 +224,151 @@ func mustTamperResetTokenSignatureForTest(t *testing.T, token string) string {
 	parts[2] = mutatedFirst + signature[1:]
 	return strings.Join(parts, ".")
 }
+
+// ShowResetPasswordPage handler-level coverage. The page composes three
+// signals that the user-facing UI keys off: invalid-token notice, forced
+// reset notice, and flash auth-error key. Each is exposed through stable
+// data-* hooks; these tests pin the rendering contract without depending on
+// localized copy.
+
+func TestShowResetPasswordPageWithoutCookieRendersForm(t *testing.T) {
+	app, _ := newOnboardingTestApp(t)
+
+	response := mustAppResponse(t, app, httptest.NewRequest(http.MethodGet, "/reset-password", nil))
+	assertStatusCode(t, response, http.StatusOK)
+
+	body := mustReadBodyString(t, response.Body)
+	assertBodyContainsAll(t, body,
+		bodyStringMatch{fragment: `id="reset-password-form"`, message: "expected reset form rendered when no cookie present"},
+	)
+	assertBodyNotContainsAll(t, body,
+		bodyStringMatch{fragment: `data-reset-notice="invalid-token"`, message: "did not expect invalid-token notice without any cookie"},
+		bodyStringMatch{fragment: `data-reset-notice="forced"`, message: "did not expect forced-reset notice without any cookie"},
+		bodyStringMatch{fragment: `data-auth-server-error`, message: "did not expect server error block without a flash auth error"},
+	)
+}
+
+func TestShowResetPasswordPageWithInvalidCookieShowsInvalidTokenNoticeAndClearsCookie(t *testing.T) {
+	app, _ := newOnboardingTestApp(t)
+
+	cookieValue := mustSealResetCookieValueForTest(t, []byte(testHandlerSecretKey), "obviously-not-a-jwt", false)
+	request := httptest.NewRequest(http.MethodGet, "/reset-password", nil)
+	request.Header.Set("Cookie", resetPasswordCookieName+"="+cookieValue)
+	response := mustAppResponse(t, app, request)
+	assertStatusCode(t, response, http.StatusOK)
+
+	body := mustReadBodyString(t, response.Body)
+	assertBodyContainsAll(t, body,
+		bodyStringMatch{fragment: `data-reset-notice="invalid-token"`, message: "expected invalid-token notice for malformed reset token"},
+	)
+	assertBodyNotContainsAll(t, body,
+		bodyStringMatch{fragment: `id="reset-password-form"`, message: "expected form to be hidden when token is invalid"},
+	)
+
+	clearedCookie := responseCookie(response.Cookies(), resetPasswordCookieName)
+	if clearedCookie == nil {
+		t.Fatal("expected reset-password cookie to be cleared on invalid token")
+	}
+	if clearedCookie.Value != "" {
+		t.Fatalf("expected cleared reset cookie value, got %q", clearedCookie.Value)
+	}
+}
+
+// TestShowResetPasswordPageWithValidNonForcedTokenShowsFormOnly locks the
+// recovery-initiated branch (non-forced reset). The page must render the
+// form but neither the forced notice nor the invalid-token notice. Without
+// this regression a refactor that always set ForcedReset=true (or never
+// set it) would silently shift the recovery UX without failing any
+// existing test.
+func TestShowResetPasswordPageWithValidNonForcedTokenShowsFormOnly(t *testing.T) {
+	app, database := newOnboardingTestApp(t)
+	user := createOnboardingTestUser(t, database, "reset-page-recovery@example.com", "StrongPass1", true)
+
+	token, err := services.BuildPasswordResetToken([]byte(testHandlerSecretKey), user.ID, user.PasswordHash, 30*time.Minute, time.Now())
+	if err != nil {
+		t.Fatalf("BuildPasswordResetToken: %v", err)
+	}
+	cookieValue := mustSealResetCookieValueForTest(t, []byte(testHandlerSecretKey), token, false)
+
+	request := httptest.NewRequest(http.MethodGet, "/reset-password", nil)
+	request.Header.Set("Cookie", resetPasswordCookieName+"="+cookieValue)
+	response := mustAppResponse(t, app, request)
+	assertStatusCode(t, response, http.StatusOK)
+
+	body := mustReadBodyString(t, response.Body)
+	assertBodyContainsAll(t, body,
+		bodyStringMatch{fragment: `id="reset-password-form"`, message: "expected form rendered for valid non-forced token"},
+	)
+	assertBodyNotContainsAll(t, body,
+		bodyStringMatch{fragment: `data-reset-notice="forced"`, message: "did not expect forced-reset notice for recovery (non-forced) token"},
+		bodyStringMatch{fragment: `data-reset-notice="invalid-token"`, message: "did not expect invalid-token notice for valid recovery token"},
+	)
+}
+
+func TestShowResetPasswordPageWithValidForcedTokenShowsForcedNoticeAndForm(t *testing.T) {
+	app, database := newOnboardingTestApp(t)
+	user := createOnboardingTestUser(t, database, "reset-page-forced@example.com", "StrongPass1", true)
+
+	token, err := services.BuildPasswordResetToken([]byte(testHandlerSecretKey), user.ID, user.PasswordHash, 30*time.Minute, time.Now())
+	if err != nil {
+		t.Fatalf("BuildPasswordResetToken: %v", err)
+	}
+	cookieValue := mustSealResetCookieValueForTest(t, []byte(testHandlerSecretKey), token, true)
+
+	request := httptest.NewRequest(http.MethodGet, "/reset-password", nil)
+	request.Header.Set("Cookie", resetPasswordCookieName+"="+cookieValue)
+	response := mustAppResponse(t, app, request)
+	assertStatusCode(t, response, http.StatusOK)
+
+	body := mustReadBodyString(t, response.Body)
+	assertBodyContainsAll(t, body,
+		bodyStringMatch{fragment: `data-reset-notice="forced"`, message: "expected forced-reset notice for forced token"},
+		bodyStringMatch{fragment: `id="reset-password-form"`, message: "expected form rendered for valid token"},
+	)
+	assertBodyNotContainsAll(t, body,
+		bodyStringMatch{fragment: `data-reset-notice="invalid-token"`, message: "did not expect invalid-token notice for valid token"},
+	)
+}
+
+// TestShowResetPasswordPageSurfacesFlashAuthErrorThroughDataKey locks the
+// flash-handoff contract: a redirect from the redeem endpoint with an auth
+// error must surface that error key on the GET page via the
+// data-auth-server-error / data-error-key hooks the front-end keys off.
+func TestShowResetPasswordPageSurfacesFlashAuthErrorThroughDataKey(t *testing.T) {
+	handler := &Handler{
+		secretKey:    []byte(testHandlerSecretKey),
+		cookieSecure: true,
+	}
+	codec, err := newSecureCookieCodec(handler.secretKey)
+	if err != nil {
+		t.Fatalf("newSecureCookieCodec: %v", err)
+	}
+	flashBytes, err := json.Marshal(FlashPayload{AuthError: "weak password"})
+	if err != nil {
+		t.Fatalf("marshal flash: %v", err)
+	}
+	flashCookieValue, err := codec.seal(flashCookieName, flashBytes)
+	if err != nil {
+		t.Fatalf("seal flash cookie: %v", err)
+	}
+
+	app, _ := newOnboardingTestApp(t)
+	request := httptest.NewRequest(http.MethodGet, "/reset-password", nil)
+	request.Header.Set("Cookie", flashCookieName+"="+flashCookieValue)
+	response := mustAppResponse(t, app, request)
+	assertStatusCode(t, response, http.StatusOK)
+
+	body := mustReadBodyString(t, response.Body)
+	assertBodyContainsAll(t, body,
+		bodyStringMatch{fragment: `data-auth-server-error`, message: "expected auth server error wrapper for flash AuthError"},
+		bodyStringMatch{fragment: `data-error-key="auth.error.weak_password"`, message: "expected localized error key surfaced via data-error-key"},
+	)
+
+	clearedFlash := responseCookie(response.Cookies(), flashCookieName)
+	if clearedFlash == nil {
+		t.Fatal("expected flash cookie to be cleared after pop")
+	}
+	if clearedFlash.Value != "" {
+		t.Fatalf("expected cleared flash cookie value, got %q", clearedFlash.Value)
+	}
+}
