@@ -1,11 +1,6 @@
 # Default owner
 * @terraincognita07
 
-# Governance and AI-agent instructions
-/AGENTS.md @terraincognita07
-/AI_CONTEXT.md @terraincognita07
-/.agents/ @terraincognita07
-
 # Security-sensitive runtime and deployment surfaces
 /cmd/ovumcy/ @terraincognita07
 /internal/api/ @terraincognita07
