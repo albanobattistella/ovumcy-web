@@ -250,7 +250,7 @@ test.describe('Auth: register, login, logout', () => {
     await expect(serverError).toHaveCount(0);
   });
 
-  test('login wrong password keeps email but does not restore password from browser storage', async ({
+  test('login wrong password does not restore email or password from browser storage', async ({
     page,
   }) => {
     const creds = createCredentials('auth-login-no-password-draft');
@@ -268,7 +268,9 @@ test.describe('Auth: register, login, logout', () => {
     await expect(page).toHaveURL(/\/login$/);
     expectNoSensitiveAuthParams(page.url());
     await expect(page.locator('[data-auth-server-error]')).toBeVisible();
-    await expect(page.locator('#login-email')).toHaveValue(creds.email);
+    // H-2: email PII no longer round-trips through the flash cookie, so the
+    // field is not repopulated after a failed login.
+    await expect(page.locator('#login-email')).toHaveValue('');
     await expect(page.locator('#login-password')).toHaveValue('');
     await expect(page.locator('#login-password')).toBeFocused();
     await expectValueNotInWebStorage(page, attemptedPassword);
