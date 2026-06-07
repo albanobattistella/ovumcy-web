@@ -74,6 +74,54 @@ func TestClearAutoFilledPeriodNeighbors_PreservesManualEditAndStops(t *testing.T
 	}
 }
 
+func TestShouldClearAutoFilledNeighbors_DependsOnPreviousDay(t *testing.T) {
+	logs := newDayLogRepositoryStub()
+	service := NewDayService(logs, &dayUserRepositoryStub{})
+	start := time.Date(2026, time.February, 10, 0, 0, 0, 0, time.UTC)
+
+	// Previous day is not a period -> this start is bare, neighbors may be cleared.
+	logs.entries["2026-02-09"] = models.DailyLog{UserID: 10, Date: start.AddDate(0, 0, -1), IsPeriod: false}
+	shouldClear, err := service.shouldClearAutoFilledNeighbors(10, start, time.UTC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !shouldClear {
+		t.Fatal("expected true when the preceding day is not a period")
+	}
+
+	// Previous day is itself a period -> the start is mid-period, do not clear.
+	logs.entries["2026-02-09"] = models.DailyLog{UserID: 10, Date: start.AddDate(0, 0, -1), IsPeriod: true}
+	shouldClear, err = service.shouldClearAutoFilledNeighbors(10, start, time.UTC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if shouldClear {
+		t.Fatal("expected false when the preceding day is a period")
+	}
+}
+
+func TestClearAutoFilledNeighborsIfBare_OnlyClearsWhenStartIsBare(t *testing.T) {
+	service, logs, start := seedAutoFilledPeriod(t, 3) // fills 02-10..02-12
+
+	// Preceding day is a period -> start is mid-period -> must NOT clear neighbors.
+	logs.entries["2026-02-09"] = models.DailyLog{UserID: 10, Date: start.AddDate(0, 0, -1), IsPeriod: true}
+	if err := service.clearAutoFilledNeighborsIfBare(10, CalendarDay(start, time.UTC), 3, time.UTC); err != nil {
+		t.Fatalf("clearAutoFilledNeighborsIfBare: %v", err)
+	}
+	if !logs.entries["2026-02-11"].IsPeriod {
+		t.Fatal("neighbors must be preserved when the start is mid-period")
+	}
+
+	// Now the preceding day is not a period -> start is bare -> neighbors cleared.
+	logs.entries["2026-02-09"] = models.DailyLog{UserID: 10, Date: start.AddDate(0, 0, -1), IsPeriod: false}
+	if err := service.clearAutoFilledNeighborsIfBare(10, CalendarDay(start, time.UTC), 3, time.UTC); err != nil {
+		t.Fatalf("clearAutoFilledNeighborsIfBare: %v", err)
+	}
+	if logs.entries["2026-02-11"].IsPeriod {
+		t.Fatal("bare-start neighbors must be cleared")
+	}
+}
+
 func TestClearAutoFilledPeriodNeighbors_NoOpForSingleDayPeriod(t *testing.T) {
 	logs := newDayLogRepositoryStub()
 	users := &dayUserRepositoryStub{settings: models.User{PeriodLength: 1}}
