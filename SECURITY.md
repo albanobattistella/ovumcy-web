@@ -9,6 +9,30 @@ Security fixes are provided for the `main` branch only.
 | `main` | :white_check_mark: |
 | older commits/tags | :x: |
 
+## Verifying Release Authenticity
+
+Published container images are keyless-signed with [cosign](https://github.com/sigstore/cosign)
+and carry a [SLSA build provenance](https://slsa.dev) attestation and a software bill of
+materials, all produced by this repository's GitHub Actions and pushed to the registry. Before
+running an image you can confirm it was built by this repository's CI from this source, rather
+than substituted or tampered with.
+
+Verify the signature (replace `v1.1.0` with the tag you are pulling):
+
+```bash
+cosign verify ghcr.io/ovumcy/ovumcy-web:v1.1.0 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/ovumcy/ovumcy-web/\.github/workflows/docker-image\.yml@'
+```
+
+Verify the build provenance with the GitHub CLI:
+
+```bash
+gh attestation verify oci://ghcr.io/ovumcy/ovumcy-web:v1.1.0 --owner ovumcy
+```
+
+A failed check means the image was not produced by this repository's release workflow. Do not run it.
+
 ## Reporting a Vulnerability
 
 Please report security issues privately.
