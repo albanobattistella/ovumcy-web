@@ -76,28 +76,12 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
 
-      - name: Prepare security artifact directory
-        run: mkdir -p .tmp/security
-
       - name: Run govulncheck
-        # Call-graph-level Go vulnerability scan; complements Trivy's dependency-level
-        # scan by reporting only vulnerabilities the code actually reaches.
-        run: ./.bin/govulncheck -format sarif ./... > .tmp/security/govulncheck.sarif
-
-      - name: Upload govulncheck SARIF
-        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98 # v4.32.6
-        with:
-          sarif_file: .tmp/security/govulncheck.sarif
-          category: govulncheck
-
-      - name: Upload govulncheck artifacts
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: govulncheck-results
-          path: .tmp/security/govulncheck.sarif
-          if-no-files-found: error
+        # Call-graph reachability gate: govulncheck exits non-zero only when the
+        # code actually calls a known-vulnerable symbol. Vulnerable-but-unreachable
+        # packages are left to the Trivy package scan; surfacing them here as SARIF
+        # only floods the Security tab with findings the code never reaches.
+        run: ./.bin/govulncheck ./...
 
   trivy-fs:
     runs-on: ubuntu-latest
