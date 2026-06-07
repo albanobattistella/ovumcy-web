@@ -58,6 +58,47 @@ jobs:
           path: .tmp/security/gosec.sarif
           if-no-files-found: error
 
+  govulncheck:
+    runs-on: ubuntu-latest
+    env:
+      GOBIN: ${{ github.workspace }}/.bin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+
+      - name: Prepare security artifact directory
+        run: mkdir -p .tmp/security
+
+      - name: Run govulncheck
+        # Call-graph-level Go vulnerability scan; complements Trivy's dependency-level
+        # scan by reporting only vulnerabilities the code actually reaches.
+        run: ./.bin/govulncheck -format sarif ./... > .tmp/security/govulncheck.sarif
+
+      - name: Upload govulncheck SARIF
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98 # v4.32.6
+        with:
+          sarif_file: .tmp/security/govulncheck.sarif
+          category: govulncheck
+
+      - name: Upload govulncheck artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: govulncheck-results
+          path: .tmp/security/govulncheck.sarif
+          if-no-files-found: error
+
   trivy-fs:
     runs-on: ubuntu-latest
 
