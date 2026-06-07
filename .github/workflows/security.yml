@@ -85,10 +85,21 @@ jobs:
 
   trivy-fs:
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Log in to Docker Hub
+        # Skipped on fork PRs where the secret is unavailable; authenticated pulls
+        # on trusted runs avoid the anonymous Docker Hub rate limit.
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare security artifact directory
         run: mkdir -p .tmp/security
@@ -113,10 +124,21 @@ jobs:
 
   trivy-image:
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Log in to Docker Hub
+        # Skipped on fork PRs where the secret is unavailable; authenticated pulls
+        # on trusted runs avoid the anonymous Docker Hub rate limit.
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build runtime image for scanning
         run: docker build --tag ovumcy-security:${{ github.sha }} .
