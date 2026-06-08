@@ -17,6 +17,8 @@ permissions:
 jobs:
   mutation-baseline:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       GOBIN: ${{ github.workspace }}/.bin
       MUTATION_WORKERS: "2"
