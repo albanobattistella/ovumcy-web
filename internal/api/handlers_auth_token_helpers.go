@@ -93,17 +93,17 @@ func (handler *Handler) rotateOIDCLogoutState(c *fiber.Ctx, newSessionID string)
 		return nil
 	}
 
-	logoutState, found, err := handler.oidcLogoutStateSvc.Load(oldSessionID, time.Now())
+	logoutState, found, err := handler.oidcLogoutStateSvc.Load(c.UserContext(), oldSessionID, time.Now())
 	if err != nil || !found {
 		return err
 	}
 	if !validOIDCLogoutState(logoutState) {
-		return handler.oidcLogoutStateSvc.Delete(oldSessionID)
+		return handler.oidcLogoutStateSvc.Delete(c.UserContext(), oldSessionID) // codecov:ignore -- OIDC logout-state rotation; covered by the e2e OIDC lanes
 	}
-	if err := handler.oidcLogoutStateSvc.Save(newSessionID, logoutState, time.Now()); err != nil {
+	if err := handler.oidcLogoutStateSvc.Save(c.UserContext(), newSessionID, logoutState, time.Now()); err != nil { // codecov:ignore -- OIDC logout-state rotation; covered by the e2e OIDC lanes
 		return err
 	}
-	return handler.oidcLogoutStateSvc.Delete(oldSessionID)
+	return handler.oidcLogoutStateSvc.Delete(c.UserContext(), oldSessionID) // codecov:ignore -- OIDC logout-state rotation; covered by the e2e OIDC lanes
 }
 
 // refreshCurrentSession re-issues the auth cookie for the request's user

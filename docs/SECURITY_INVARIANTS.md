@@ -7,7 +7,7 @@ Every entry has a corresponding test or set of tests in `SECURITY.md → Test En
 ## Layering
 
 - HTTP transport lives in `internal/api`, business logic in `internal/services`, persistence in `internal/db`. Do not access the database from `internal/api` directly.
-- Cross-cutting concerns sit in `internal/security`, `internal/httpx`, and `internal/i18n`. Do not duplicate sealed-cookie or AEAD logic outside `internal/security`.
+- Cross-cutting concerns sit in `internal/security`, `internal/httpx`, and `internal/i18n`. Do not duplicate sealed-cookie or AEAD logic outside `internal/security` — the single HKDF + AES-256-GCM primitive (and both purpose label sets) is `SealedCipher` in `internal/security/sealed_cipher.go`.
 - Templates live in `internal/templates` and use Go `html/template` auto-escape. Do not introduce `template.HTML(...)` with user-controlled input.
 
 ## Role and access control
@@ -19,15 +19,16 @@ Every entry has a corresponding test or set of tests in `SECURITY.md → Test En
 
 ## Authentication and sessions
 
-- Auth, recovery, reset, OIDC state, OIDC step-up, OIDC logout bridge, OIDC link-pending, TOTP pending, TOTP setup, register pickup, and flash cookies are sealed with AES-256-GCM under an HKDF-derived key, with the cookie name (or row id, for field encryption) bound to the AEAD AAD. The codec is `internal/api/secure_cookie_codec.go`; the version envelope is `v2` and `v1` payloads are rejected on read.
-- TOTP secrets are field-encrypted under a distinct HKDF label set and AAD-bound to `users.id`. See `internal/security/field_crypto.go`.
+- Auth, recovery, reset, OIDC state, OIDC step-up, OIDC logout bridge, OIDC link-pending, TOTP pending, TOTP setup, register pickup, and flash cookies are sealed with AES-256-GCM under an HKDF-derived key, with the cookie name (or row id, for field encryption) bound to the AEAD AAD. The AEAD core is `SealedCipher` in `internal/security/sealed_cipher.go`; `internal/api/secure_cookie_codec.go` is a thin framing layer owning only the cookie-name→AAD mapping, the `v2` version envelope (`v1` payloads are rejected on read), and base64url transport. Golden fixtures in `internal/api/secure_cookie_codec_golden_test.go` pin the stored format across refactors.
+- TOTP secrets are field-encrypted under a distinct HKDF label set and AAD-bound to `users.id`. See `internal/security/field_crypto.go`; golden fixtures in `internal/security/field_crypto_golden_test.go` pin the persisted ciphertext format.
 - Operations that rotate a long-lived credential (password change, password reset, recovery-code regeneration, forced operator reset, TOTP enable/disable, clear-data) must bump `users.auth_session_version` in the same atomic database update, invalidating every active auth cookie for that user. The originating device gets a freshly issued cookie inline.
 - Auth session tokens use `jwt.SigningMethodHS256`. The parser explicitly rejects non-HMAC and `none` algorithms.
-- The OIDC sign-in flow is Authorization Code + PKCE (S256) + `response_mode=form_post`. The verifier and `state`/`nonce` live in a single sealed cookie; the callback exempts CSRF (justified by state/nonce/PKCE replacing it). The ID-token allowlist is asymmetric-only (`RS*`, `ES*`, `PS*`, `EdDSA`); `HS*` and `none` are refused even if the provider advertises them.
+- The OIDC sign-in flow is Authorization Code + PKCE (S256) + `response_mode=form_post`. The verifier and `state`/`nonce` live in a single sealed cookie; the callback exempts CSRF (justified by state/nonce/PKCE replacing it). The ID-token allowlist is asymmetric-only (`RS*`, `ES*`, `PS*`, `EdDSA`); `HS*` and `none` are refused even if the provider advertises them. The discovery-supplied `jwks_uri` is origin-pinned to the configured issuer; a cross-origin `jwks_uri` is rejected before any verifier is built.
+- Behind a trusted proxy, the edge rate limiters key on the rightmost untrusted `X-Forwarded-For` hop (relative to `TRUSTED_PROXIES`), so a client-spoofed XFF prefix cannot defeat per-IP limits. `PROXY_HEADER` controls fiber's `c.IP()`, which backs only the secondary per-client auth buckets.
 
 ## Privacy and PII
 
-- Recovery codes, TOTP secrets, submitted codes, rate-limit identity material, plaintext passwords, and email addresses must not appear in any log output. `SafeRequestLogPath` (in `internal/api/request_logging.go`) masks `:email`, `:id`, `:date`, and opaque tokens before any audit emission.
+- Recovery codes, TOTP secrets, submitted codes, rate-limit identity material, plaintext passwords, and email addresses must not appear in any log output. `SafeRequestLogPath` (in `internal/api/request_logging.go`) masks `:email`, `:id`, `:date`, and opaque tokens in the request path; the companion `SafeLogError` masks emails and opaque tokens in the request log's error field. Both run before any audit emission.
 - Auth and settings flash banners must come from sealed cookies or session state, never from URL query parameters. Do not introduce `?error=`, `?status=`, or `?email=` notification sources.
 - Public registration (`POST /api/v1/users`) requires explicit consent — the `consent` field must be truthy (`true`/`1`/`yes`/`on`). The browser checkbox lives on `/register`; the backend rejects requests without consent with `auth.error.consent_required`.
 - Health data is **owner-only**. The `clear-data` and `delete-account` flows require the current password and bump `auth_session_version`.
@@ -39,7 +40,7 @@ Every entry has a corresponding test or set of tests in `SECURITY.md → Test En
 
 ## Cryptographic baseline
 
-- AEAD: AES-256-GCM (sealed cookies, field encryption). Key derivation: HKDF-SHA256 with versioned, purpose-specific salt and info labels (see `SECURITY.md → SECRET_KEY Usage Map`).
+- AEAD: AES-256-GCM (sealed cookies, field encryption), implemented once in `internal/security/sealed_cipher.go`. Key derivation: HKDF-SHA256 with versioned, purpose-specific salt and info labels; the two purposes derive distinct keys, so cross-purpose opens fail (see `SECURITY.md → SECRET_KEY Usage Map`).
 - Randomness: `crypto/rand` for nonces, session IDs, OIDC state/nonce, PKCE verifiers, recovery codes. **Never `math/rand` for security-sensitive values.**
 - Comparisons: `crypto/subtle.ConstantTimeCompare` for OIDC state, recovery-code hashes (via `bcrypt.CompareHashAndPassword`), TOTP code validation, and password-state fingerprints.
 - Passwords are bcrypt cost 10. Minimum length 8 with at least one uppercase, one lowercase, and one digit.

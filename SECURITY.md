@@ -212,6 +212,8 @@ Per-IP HTTP rate limits enforced by Fiber's limiter middleware. Defaults are tun
 | `DELETE /api/v1/sessions/current` | 60 requests / 15 minutes | `RATE_LIMIT_LOGOUT_MAX`, `RATE_LIMIT_LOGOUT_WINDOW` |
 | `/api/*` (catch-all) | 300 requests / 1 minute | `RATE_LIMIT_API_MAX`, `RATE_LIMIT_API_WINDOW` |
 
+Behind a trusted proxy (`TRUST_PROXY_ENABLED=true`), the per-IP key is the **rightmost untrusted `X-Forwarded-For` hop** relative to `TRUSTED_PROXIES` (`cmd/ovumcy/main.go` `rateLimitKeyGenerator`), not fiber's default leftmost `c.IP()`, so a client-spoofed XFF prefix cannot rotate the key and defeat the limit.
+
 Plus per-account, identity-keyed budgets enforced by `AuthAttemptPolicy` (`internal/services/auth_attempt_policy.go`):
 
 - Login attempts: 8 failures / 15 minutes.
@@ -232,6 +234,8 @@ Per-account budgets are keyed by `HMAC-SHA256(SECRET_KEY, "ovumcy.auth-attempt.i
 | Rate-limit identity HMAC | `HMAC-SHA256(SECRET_KEY, "ovumcy.auth-attempt.identity.v1:" || identity)` | Existing per-identity counters become unreachable; cooldowns reset. Self-recovering. |
 | Auth session token signing | Used inside `BuildAuthSessionTokenWithSessionID` to sign session tokens before they are sealed into `ovumcy_auth` | Subsumed by the sealed-cookie invalidation row above. |
 
+Both HKDF label pairs live next to the shared AEAD primitive (`SealedCipher` in `internal/security/sealed_cipher.go`). The sealed-cookie codec in `internal/api/secure_cookie_codec.go` adds only cookie framing on top: the name→AAD mapping, the `v2` version envelope, and base64url transport.
+
 **Operational caveat — rotating `SECRET_KEY` with 2FA accounts:**
 
 `users.totp_secret` is encrypted under a key derived from the current `SECRET_KEY`. Rotating the secret without a coordinated re-encryption step leaves TOTP-enabled accounts unable to complete the 2FA challenge — they will see a failed verification even when their authenticator app produces the correct code. Recovery options for each affected user are:
@@ -251,6 +255,7 @@ Plan secret rotation as planned maintenance, communicate it in advance, and cons
 - Cross-site form submission (CSRF middleware on every state-changing endpoint; OIDC callback uses provider-issued `state`/`nonce` instead).
 - Algorithm-confusion attacks against ID tokens (asymmetric-algorithm allowlist; `HS*` and `none` are rejected even if the provider advertises them).
 - Malicious OIDC discovery metadata redirecting the logout flow to attacker-controlled hosts (`end_session_endpoint` host-pinned to the configured issuer).
+- Malicious OIDC discovery metadata redirecting the JWKS key fetch to attacker-controlled hosts (`jwks_uri` origin-pinned to the configured issuer, so token-signature keys are only fetched same-origin).
 - Cross-account ciphertext substitution at the database layer (field encryption is AAD-bound to the row id).
 - Trivial password reuse (8-character minimum with three required character classes).
 - Account takeover via a malicious or sloppy upstream OIDC IdP asserting a verified email already held by a local-auth Ovumcy account — first-time linking is refused without an explicit password confirmation step (`ovumcy_oidc_link_pending` + `/auth/oidc/link-confirm`), and when the target has TOTP enabled the same submission additionally requires a valid 6-digit code. See *OIDC Account Linking*.
@@ -327,6 +332,7 @@ Policy-level claims (threat model in/out-of-scope, design rationale, marketing-s
 | Tampered ciphertext fails to decrypt | `TestDecryptField_TamperedCiphertext` in [internal/security/field_crypto_test.go](internal/security/field_crypto_test.go) |
 | Legacy no-AAD ciphertexts open through the fallback path | `TestDecryptField_LegacyFallback` in [internal/security/field_crypto_test.go](internal/security/field_crypto_test.go) |
 | Empty `SECRET_KEY` is refused | `TestEncryptField_EmptyKey`, `TestDecryptField_EmptyKey` in [internal/security/field_crypto_test.go](internal/security/field_crypto_test.go) |
+| Golden pre-consolidation ciphertexts (AAD-bound and legacy no-AAD) still decrypt to the same plaintext | `TestDecryptFieldOpensPreConsolidationGoldenCiphertexts` in [internal/security/field_crypto_golden_test.go](internal/security/field_crypto_golden_test.go) |
 
 ### OIDC Account Linking
 
@@ -373,6 +379,7 @@ Policy-level claims (threat model in/out-of-scope, design rationale, marketing-s
 | Sealed cookies use the AES-GCM `v2.<...>` envelope | `TestSecureCookieCodecSealsWithVersion2Prefix` in [internal/api/secure_cookie_codec_rotation_test.go](internal/api/secure_cookie_codec_rotation_test.go) |
 | Legacy `v1` cookie payloads are rejected | `TestSecureCookieCodecRejectsLegacyV1Payload` in [internal/api/secure_cookie_codec_rotation_test.go](internal/api/secure_cookie_codec_rotation_test.go) |
 | Sealed cookies are AAD-bound to the cookie name; cross-cookie substitution fails | `secure_cookie_codec_security_test.go` in `internal/api/` |
+| Golden sealed values from the pre-consolidation codec still open for all 11 purposes | `TestSecureCookieCodecOpensPreConsolidationGoldenValues` in [internal/api/secure_cookie_codec_golden_test.go](internal/api/secure_cookie_codec_golden_test.go) |
 | `ovumcy_auth`, `ovumcy_register_pickup`, `ovumcy_recovery_code` all set `SameSite=Lax` | `cookie_security_enabled_test.go`, `cookie_security_default_test.go` in `internal/api/` |
 | OIDC sign-in cookies (`ovumcy_oidc_auth`, `ovumcy_oidc_stepup`) require `Secure=true` to issue | `oidc_state_cookie_test.go`, `oidc_stepup_cookie_test.go` in `internal/api/` |
 | Login issues a sealed `ovumcy_auth` cookie (not a legacy JWT) | `TestLoginSetsSealedAuthCookieValue`, `TestAuthMiddlewareRejectsLegacyJWTAuthCookieFallback` in [internal/api/auth_cookie_compat_regression_test.go](internal/api/auth_cookie_compat_regression_test.go) |
@@ -415,6 +422,7 @@ Policy-level claims (threat model in/out-of-scope, design rationale, marketing-s
 | TOTP login rate-limited at 5 failures / 15 min | `TestVerifyTOTPLoginRateLimitsRepeatedAttempts` (or sibling) in `handlers_auth_2fa_test.go` |
 | TOTP disable rate-limited at 5 failures / 15 min | `handlers_settings_2fa_test.go` |
 | Rate-limit error response is sanitized and contains no PII | `TestAuthRateLimitHandlerLogsSecurityEventWithoutPII` in [cmd/ovumcy/main_test.go](cmd/ovumcy/main_test.go) |
+| Edge rate limiters key on the real client IP (rightmost untrusted `X-Forwarded-For` hop); a spoofed prefix shares one bucket, and an untrusted peer / disabled proxy ignores the header | `TestRateLimitKeyGeneratorBucketing`, `TestRightmostUntrustedIP`, `TestTrustedProxyMatcher` in [cmd/ovumcy/rate_limit_keygen_test.go](cmd/ovumcy/rate_limit_keygen_test.go) |
 
 ### SECRET_KEY Usage Map
 
@@ -422,6 +430,7 @@ Policy-level claims (threat model in/out-of-scope, design rationale, marketing-s
 | --- | --- |
 | Sealed cookies derive their key from `SECRET_KEY` via HKDF with versioned salt/info labels | `secure_cookie_codec_rotation_test.go`, `secure_cookie_codec_security_test.go` in `internal/api/` |
 | Field encryption uses a distinct HKDF label set; AAD prevents cross-row swap | `TestDecryptField_RejectsWrongAAD` in [internal/security/field_crypto_test.go](internal/security/field_crypto_test.go) |
+| Cookie and field label sets derive distinct keys; a payload sealed for one purpose cannot be opened as the other | `TestSealedCipherPurposeKeySeparation` in [internal/security/sealed_cipher_test.go](internal/security/sealed_cipher_test.go) |
 | Rate-limit identity HMAC uses a distinct domain-separation label | `TestAuthAttemptPolicyKeysUseScopedHMACFingerprint` in [internal/services/auth_attempt_policy_test.go](internal/services/auth_attempt_policy_test.go) |
 | Rotating `SECRET_KEY` breaks field-encrypted TOTP secrets (DecryptField with the new key fails) | `TestDecryptField_WrongKey` in [internal/security/field_crypto_test.go](internal/security/field_crypto_test.go) |
 
@@ -430,6 +439,7 @@ Policy-level claims (threat model in/out-of-scope, design rationale, marketing-s
 | Claim | Enforced by |
 | --- | --- |
 | OIDC `end_session_endpoint` is host-pinned; cross-origin endpoint is dropped, logout falls back to local | `TestOIDC_RuntimePoC_HostPinRejectsCrossOriginEndSessionEndpoint`, `TestOIDC_RuntimePoC_HostPinAcceptsSameOriginEndSessionEndpoint` in [internal/security/oidc_runtime_poc_test.go](internal/security/oidc_runtime_poc_test.go) |
+| OIDC `jwks_uri` is origin-pinned to the issuer; a cross-origin `jwks_uri` from discovery is rejected before any verifier is built | `TestOIDC_RuntimePoC_JWKSOriginPinRejectsCrossOrigin`, `TestOIDC_RuntimePoC_JWKSOriginPinAcceptsSameOrigin` in [internal/security/oidc_runtime_poc_test.go](internal/security/oidc_runtime_poc_test.go); `TestValidateDiscoveredJWKSURI` in [internal/security/oidc_test.go](internal/security/oidc_test.go) |
 | OIDC ID-token signing-algorithm allowlist rejects symmetric algorithms and `none` | `TestOIDC_RuntimePoC_AlgorithmConfusionRejected`, `TestOIDC_RuntimePoC_AlgorithmNoneRejected` in [internal/security/oidc_runtime_poc_test.go](internal/security/oidc_runtime_poc_test.go) |
 | OIDC step-up reauth requires a matching `(issuer, subject)` identity for the current user | `auth_oidc_v2_regressions_test.go`, `settings_oidc_local_password_setup_test.go` in `internal/api/` |
 | OIDC first-time link to a pre-existing local-auth account is refused without password confirmation (returns `ErrOIDCLinkRequiresConfirmation`; no identity row is created in the bypass path) | `TestOIDCLoginServiceAuthenticateRequiresConfirmationOnFirstLinkToExistingEmail` in [internal/services/oidc_login_service_test.go](internal/services/oidc_login_service_test.go) |
@@ -449,3 +459,4 @@ Policy-level claims (threat model in/out-of-scope, design rationale, marketing-s
 | When enabled, symptom mutation log does not leak the user-supplied symptom name | `TestCreateSymptomLogsMutationWithoutLeakingUserInput` in [internal/api/security_event_logging_mutation_regression_test.go](internal/api/security_event_logging_mutation_regression_test.go) |
 | CSRF middleware error path does not leak PII into the audit log | `TestCSRFMiddlewareErrorHandlerLogsSecurityEventWithoutPII` in [cmd/ovumcy/main_test.go](cmd/ovumcy/main_test.go) |
 | Rate-limit handler does not leak PII into the audit log | `TestAuthRateLimitHandlerLogsSecurityEventWithoutPII` in [cmd/ovumcy/main_test.go](cmd/ovumcy/main_test.go) |
+| The Fiber request log's error field is sanitized (emails → `:email`, opaque tokens → `:token`) | `TestSafeLogError` in [internal/api/request_logging_test.go](internal/api/request_logging_test.go) |
