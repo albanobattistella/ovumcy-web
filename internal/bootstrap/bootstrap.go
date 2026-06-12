@@ -41,6 +41,8 @@ type Options struct {
 	// LogoutAttempts, when non-nil, configures the logout attempt limiter.
 	// Production sets it; tests leave it nil to keep the service default.
 	LogoutAttempts *AttemptLimit
+	// AuditLogEnabled gates the per-action security-event audit stream.
+	AuditLogEnabled bool
 }
 
 // BuildDependencies wires the repositories and configuration into the domain
@@ -75,7 +77,6 @@ func BuildDependencies(repositories *db.Repositories, secretKey []byte, i18nMana
 	exportService := services.NewExportService(dayService, symptomService)
 	settingsService := services.NewSettingsService(repositories.Users)
 	totpService := services.NewTOTPService(repositories.Users, secretKey, attemptLimiter)
-	notificationService := services.NewNotificationService()
 	oidcLogoutStateService := services.NewOIDCLogoutStateService(repositories.OIDCLogout)
 
 	var oidcService apideps.OIDCWorkflowService = services.NewOIDCLoginService(
@@ -89,6 +90,7 @@ func BuildDependencies(repositories *db.Repositories, secretKey []byte, i18nMana
 	}
 
 	return apideps.Dependencies{
+		AuditLogEnabled:      opts.AuditLogEnabled,
 		AuthService:          authService,
 		RegistrationService:  registrationService,
 		PasswordResetService: passwordResetService,
@@ -103,7 +105,7 @@ func BuildDependencies(repositories *db.Repositories, secretKey []byte, i18nMana
 		DashboardViewService: dashboardViewService,
 		ExportService:        exportService,
 		SettingsService:      settingsService,
-		SettingsViewService:  services.NewSettingsViewService(settingsService, notificationService, exportService, symptomService),
+		SettingsViewService:  services.NewSettingsViewService(settingsService, exportService, symptomService),
 		OnboardingService:    services.NewOnboardingService(repositories.Users),
 		SetupService:         services.NewSetupService(repositories.Users),
 		TOTPService:          totpService,

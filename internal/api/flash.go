@@ -11,22 +11,12 @@ import (
 
 const flashCookieTTL = 5 * time.Minute
 
-func SetFlashCookie(c *fiber.Ctx, payload FlashPayload, secretKey []byte) {
-	writeFlashCookie(c, payload, false, secretKey)
-}
-
-func SetFlashCookieWithSecure(c *fiber.Ctx, payload FlashPayload, secure bool, secretKey []byte) {
-	writeFlashCookie(c, payload, secure, secretKey)
-}
+var flashCookieSpec = sealedCookieSpec{name: flashCookieName, path: "/"}
 
 func (handler *Handler) setFlashCookie(c *fiber.Ctx, payload FlashPayload) {
-	writeFlashCookie(c, payload, handler.cookieSecure, handler.secretKey)
-}
-
-func writeFlashCookie(c *fiber.Ctx, payload FlashPayload, secure bool, secretKey []byte) {
 	payload = normalizeFlashPayload(payload)
 	if flashPayloadEmpty(payload) {
-		clearFlashCookie(c, secure)
+		handler.clearFlashCookie(c)
 		return
 	}
 
@@ -34,24 +24,7 @@ func writeFlashCookie(c *fiber.Ctx, payload FlashPayload, secure bool, secretKey
 	if err != nil {
 		return
 	}
-	codec, err := newSecureCookieCodec(secretKey)
-	if err != nil {
-		return
-	}
-	encoded, err := codec.seal(flashCookieName, serialized)
-	if err != nil {
-		return
-	}
-
-	c.Cookie(&fiber.Cookie{
-		Name:     flashCookieName,
-		Value:    encoded,
-		Path:     "/",
-		HTTPOnly: true,
-		Secure:   secure,
-		SameSite: "Lax",
-		Expires:  time.Now().Add(flashCookieTTL),
-	})
+	_ = handler.writeSealedCookie(c, flashCookieSpec, serialized, time.Now().Add(flashCookieTTL))
 }
 
 func (handler *Handler) popFlashCookie(c *fiber.Ctx) FlashPayload {
@@ -59,7 +32,7 @@ func (handler *Handler) popFlashCookie(c *fiber.Ctx) FlashPayload {
 	if raw == "" {
 		return FlashPayload{}
 	}
-	clearFlashCookie(c, handler.cookieSecure)
+	handler.clearFlashCookie(c)
 
 	codec, err := handler.cookieCodec()
 	if err != nil {
@@ -78,16 +51,8 @@ func (handler *Handler) popFlashCookie(c *fiber.Ctx) FlashPayload {
 	return normalizeFlashPayload(payload)
 }
 
-func clearFlashCookie(c *fiber.Ctx, secure bool) {
-	c.Cookie(&fiber.Cookie{
-		Name:     flashCookieName,
-		Value:    "",
-		Path:     "/",
-		HTTPOnly: true,
-		Secure:   secure,
-		SameSite: "Lax",
-		Expires:  time.Now().Add(-1 * time.Hour),
-	})
+func (handler *Handler) clearFlashCookie(c *fiber.Ctx) {
+	handler.clearSealedCookie(c, flashCookieSpec)
 }
 
 func normalizeFlashPayload(payload FlashPayload) FlashPayload {

@@ -5,19 +5,17 @@ import (
 	"github.com/ovumcy/ovumcy-web/internal/services"
 )
 
+var trackingSettingsMutation = healthMutationKind{action: "settings.tracking_update", target: "tracking_settings"}
+
 func (handler *Handler) UpdateTrackingSettings(c *fiber.Ctx) error {
 	user, ok := currentUser(c)
 	if !ok {
-		spec := unauthorizedErrorSpec()
-		handler.logHealthDataMutationError(c, "settings.tracking_update", spec, "tracking_settings")
-		return handler.respondMappedError(c, spec)
+		return handler.failMutation(c, trackingSettingsMutation, unauthorizedErrorSpec())
 	}
 
 	input, err := parseTrackingSettingsInput(c)
 	if err != nil {
-		spec := settingsInvalidInputErrorSpec()
-		handler.logHealthDataMutationError(c, "settings.tracking_update", spec, "tracking_settings")
-		return handler.respondMappedError(c, spec)
+		return handler.failMutation(c, trackingSettingsMutation, settingsInvalidInputErrorSpec())
 	}
 
 	update := services.TrackingSettingsUpdate{
@@ -30,14 +28,12 @@ func (handler *Handler) UpdateTrackingSettings(c *fiber.Ctx) error {
 		ShowHistoricalPhases: input.ShowHistoricalPhases,
 	}
 	if err := handler.settingsService.SaveTrackingSettings(c.UserContext(), user.ID, update); err != nil {
-		spec := settingsTrackingUpdateErrorSpec()
-		handler.logHealthDataMutationError(c, "settings.tracking_update", spec, "tracking_settings")
-		return handler.respondMappedError(c, spec)
+		return handler.failMutation(c, trackingSettingsMutation, settingsTrackingUpdateErrorSpec())
 	}
 
 	handler.settingsService.ApplyTrackingSettings(user, update)
-	status := handler.settingsService.ResolveTrackingUpdateStatus()
-	handler.logHealthDataMutation(c, "settings.tracking_update", "success", "tracking_settings")
+	status := services.SettingsTrackingUpdatedStatus
+	handler.logMutationSuccess(c, trackingSettingsMutation)
 
 	if acceptsJSON(c) {
 		return c.JSON(fiber.Map{
@@ -53,12 +49,7 @@ func (handler *Handler) UpdateTrackingSettings(c *fiber.Ctx) error {
 		})
 	}
 	if isHTMX(c) {
-		messageKey := services.SettingsStatusTranslationKey(status)
-		message := translateMessage(currentMessages(c), messageKey)
-		if message == "" || message == messageKey {
-			message = "Tracking settings updated successfully."
-		}
-		return c.SendString(htmxDismissibleSuccessStatusMarkup(currentMessages(c), message))
+		return c.SendString(htmxSettingsSuccessMarkup(c, status, "Tracking settings updated successfully."))
 	}
 
 	handler.setFlashCookie(c, FlashPayload{SettingsSuccess: status})
