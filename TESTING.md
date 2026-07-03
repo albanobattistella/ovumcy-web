@@ -29,7 +29,8 @@ fails ("kills" the mutant). Surviving mutants reveal weak assertions.
 
 - Run it locally: `scripts/mutation.sh baseline` (full) or `scripts/mutation.sh diff <ref>` (changed code only).
 - A weekly CI job tracks the trend; it is advisory and never blocks a merge.
-- **Mutation efficacy** (gremlins, killed / (killed + survived); tracked weekly): `internal/services` **99.7%** (1462/1466) and `internal/security` **91.7%** (99/108). Every surviving mutant is a documented equivalent (an unreachable guard, a redundant clamp, an error-text-only difference) or an OIDC provider path covered by the e2e lanes rather than Go units — classified, not chased. Per-package breakdowns live in [`.mutation/`](.mutation/).
+- Baseline scope now covers business-logic, security, and transport: `internal/services`, `internal/security`, and `internal/api`.
+- **Mutation efficacy** (gremlins, killed / (killed + survived); tracked weekly): `internal/services` **99.7%** (1462/1466) and `internal/security` **91.7%** (99/108). Every surviving mutant is a documented equivalent (an unreachable guard, a redundant clamp, an error-text-only difference) or an OIDC provider path covered by the e2e lanes rather than Go units — classified, not chased. `internal/api` (the largest package, ~8.5k source lines, heavy DB-integration tests) joined the baseline scope but has no number yet: it is baseline pending the first weekly CI run, since canonical efficacy comes only from that clean-Linux job, never a local Windows run. Per-package breakdowns live in [`.mutation/`](.mutation/).
 - Statement coverage is lower than efficacy by design: mutation testing checks whether a test *fails when the code breaks*, not merely whether a line ran. The "not covered" mutants are dominated by package-level `const`/`var` declarations (which Go coverage never instruments) and the network-facing OIDC client (covered end-to-end).
 
 Surviving mutants are triaged honestly: a *real* gap gets a new behavior test; an
@@ -92,8 +93,10 @@ verify it against the numbers.
 ## Running the suite
 
 ```bash
-# Go: unit + integration + property + fuzz seeds
-go test ./...
+# Go: unit + integration + property + fuzz seeds.
+# Scoped to the module's Go trees (not ./...) so a local node_modules/ — where a
+# vendored JS dependency ships a .go file — isn't swept into the wildcard.
+go test ./cmd/... ./internal/... ./migrations/... ./scripts/... ./web/...
 
 # Active fuzzing of a single target
 go test ./internal/services/ -run '^$' -fuzz FuzzParseDayDate -fuzztime 30s

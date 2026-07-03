@@ -37,7 +37,6 @@ func newMutationBranchTestApp(t *testing.T, injectUser bool) (*fiber.App, *gorm.
 	app.Get("/api/v1/symptoms", handler.GetSymptoms)
 	app.Get("/api/v1/exports/csv", handler.ExportCSV)
 	app.Get("/api/v1/exports/json", handler.ExportJSON)
-	app.Delete("/api/days", handler.DeleteDailyLog)
 	app.Put("/api/days/:date", handler.UpsertDay)
 	app.Delete("/api/days/:date", handler.DeleteDay)
 	app.Post("/api/days/:date/cycle-start", handler.MarkCycleStart)
@@ -47,6 +46,7 @@ func newMutationBranchTestApp(t *testing.T, injectUser bool) (*fiber.App, *gorm.
 	app.Post("/api/v1/symptoms/:id/restore", handler.RestoreSymptom)
 	app.Patch("/api/v1/users/current/tracking", handler.UpdateTrackingSettings)
 	app.Patch("/api/v1/users/current/cycle", handler.UpdateCycleSettings)
+	app.Post("/api/v1/onboarding/complete", handler.OnboardingComplete)
 	return app, database
 }
 
@@ -79,7 +79,6 @@ func TestMutationHandlersRejectMissingUserAtHandlerLevel(t *testing.T) {
 		method string
 		path   string
 	}{
-		{http.MethodDelete, "/api/days?date=2026-02-17"},
 		{http.MethodPut, "/api/days/2026-02-17"},
 		{http.MethodDelete, "/api/days/2026-02-17"},
 		{http.MethodPost, "/api/days/2026-02-17/cycle-start"},
@@ -110,7 +109,7 @@ func TestMutationHandlersMapInvalidInputThroughFailMutation(t *testing.T) {
 		body        string
 		contentType string
 	}{
-		{"day delete invalid date", http.MethodDelete, "/api/days?date=garbage", "", ""},
+		{"day delete invalid date", http.MethodDelete, "/api/days/garbage", "", ""},
 		{"cycle start invalid date", http.MethodPost, "/api/days/garbage/cycle-start", "", ""},
 		{"symptom create empty name", http.MethodPost, "/api/v1/symptoms", url.Values{"name": {"   "}}.Encode(), form},
 		{"symptom create malformed json", http.MethodPost, "/api/v1/symptoms", "{", "application/json"},
@@ -119,6 +118,8 @@ func TestMutationHandlersMapInvalidInputThroughFailMutation(t *testing.T) {
 		{"symptom update empty name", http.MethodPatch, "/api/v1/symptoms/1", url.Values{"name": {"   "}}.Encode(), form},
 		{"symptom restore invalid id", http.MethodPost, "/api/v1/symptoms/garbage/restore", "", ""},
 		{"tracking malformed json", http.MethodPatch, "/api/v1/users/current/tracking", "{", "application/json"},
+		{"cycle length out of range", http.MethodPatch, "/api/v1/users/current/cycle", url.Values{"cycle_length": {"999"}, "period_length": {"5"}}.Encode(), form},
+		{"onboarding complete steps required", http.MethodPost, "/api/v1/onboarding/complete", "", ""},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -152,7 +153,6 @@ func TestMutationHandlersMapServiceFailuresThroughFailMutation(t *testing.T) {
 		body        string
 		contentType string
 	}{
-		{"day delete by query", http.MethodDelete, "/api/days?date=2026-02-17", "", ""},
 		{"day delete by path", http.MethodDelete, "/api/days/2026-02-17", "", ""},
 		{"day upsert", http.MethodPut, "/api/days/2026-02-17", url.Values{"is_period": {"true"}, "flow": {"medium"}}.Encode(), form},
 		{"cycle start mark", http.MethodPost, "/api/days/2026-02-17/cycle-start", "", ""},
